@@ -52,6 +52,30 @@ async function restRequest(
 }
 
 /**
+ * Plain INSERT rows (no conflict resolution). Use for append-only tables like stock_snapshots.
+ */
+export async function insertBatched<T extends object>(
+  table: string,
+  rows: T[],
+  batchSize = 500
+): Promise<number> {
+  if (rows.length === 0) return 0;
+  let total = 0;
+  for (let i = 0; i < rows.length; i += batchSize) {
+    const batch = rows.slice(i, i + batchSize);
+    try {
+      await restRequest("POST", `/${table}`, batch, "return=minimal");
+    } catch (err: any) {
+      throw new Error(
+        `Insert into ${table} failed at batch ${i}-${i + batch.length}: ${err.message}`
+      );
+    }
+    total += batch.length;
+  }
+  return total;
+}
+
+/**
  * Upsert rows into a table using PostgREST's upsert syntax.
  * onConflict can be a single column ("card_code") or composite ("doc_entry,line_num").
  */

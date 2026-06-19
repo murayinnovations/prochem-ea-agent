@@ -7,6 +7,8 @@ import {
   FileText,
   Users,
   Package,
+  Boxes,
+  Wallet,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -17,6 +19,8 @@ const NAV_ITEMS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/brands",    label: "Brands",    icon: Package },
   { href: "/customers", label: "Customers", icon: Users },
   { href: "/invoices",  label: "Invoices",  icon: FileText },
+  { href: "/stock",     label: "Stock",     icon: Boxes },
+  { href: "/payables",  label: "Payables",  icon: Wallet },
 ];
 
 function isActive(href: string, pathname: string): boolean {

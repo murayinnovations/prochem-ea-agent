@@ -14,14 +14,25 @@ import {
   fetchInvoices,
   fetchInvoiceLinesForDocs,
   fetchPayments,
+  fetchStockSnapshot,
+  fetchSuppliers,
+  fetchApInvoices,
+  fetchPurchaseOrders,
+  fetchPurchaseOrderLines,
   SapCustomer,
   SapItem,
   SapInvoice,
   SapInvoiceLine,
   SapPayment,
+  SapStockItem,
+  SapSupplier,
+  SapApInvoice,
+  SapPurchaseOrder,
+  SapPurchaseOrderLine,
 } from "./sap-client.js";
 import {
   upsertBatched,
+  insertBatched,
   getWatermark,
   setWatermark,
   startLog,
@@ -311,6 +322,184 @@ async function syncPayments(runId: string) {
   }
 }
 
+async function syncStockSnapshot(runId: string) {
+  const entity = "stock_snapshots";
+  const snapshotAt = new Date().toISOString();
+  const logId = await startLog({ entity, run_id: runId, status: "running" });
+  try {
+    const rows: SapStockItem[] = await fetchStockSnapshot();
+    console.log(`  [stock_snapshots] read ${rows.length} rows from SAP`);
+
+    const mapped = rows.map((r) => ({
+      snapshot_at: snapshotAt,
+      item_code: r.ItemCode,
+      whs_code: r.WhsCode,
+      whs_name: r.WhsName ?? null,
+      on_hand: r.OnHand ?? 0,
+      committed: r.IsCommited ?? 0,
+      on_order: r.OnOrder ?? 0,
+      available: (r.OnHand ?? 0) - (r.IsCommited ?? 0),
+      synced_at: new Date().toISOString(),
+    }));
+
+    const inserted = await insertBatched("stock_snapshots", mapped);
+    await finishLog(logId, { status: "success", rows_read: rows.length, rows_upserted: inserted });
+    return { rows: rows.length, inserted };
+  } catch (err: any) {
+    await finishLog(logId, { status: "failed", error_message: err.message });
+    throw err;
+  }
+}
+
+async function syncSuppliers(runId: string) {
+  const entity = "suppliers";
+  const watermark = await getWatermark(entity);
+  const logId = await startLog({
+    entity, run_id: runId, status: "running",
+    watermark_before: watermark?.toISOString(),
+  });
+  try {
+    const rows: SapSupplier[] = await fetchSuppliers(watermark ?? undefined);
+    console.log(`  [suppliers] read ${rows.length} rows from SAP`);
+
+    const mapped = rows.map((r) => ({
+      card_code: r.CardCode,
+      card_name: r.CardName ?? r.CardCode,
+      card_type: r.CardType,
+      country: r.Country,
+      currency: r.Currency ?? "KES",
+      balance: r.Balance ?? 0,
+      valid: asBool(r.validFor),
+      sap_create_date: safeDate(r.CreateDate),
+      sap_update_date: safeDate(r.UpdateDate),
+      synced_at: new Date().toISOString(),
+    }));
+
+    const upserted = await upsertBatched("suppliers", mapped, "card_code");
+    const newMax = maxUpdateDate(rows);
+    if (newMax) await setWatermark(entity, newMax);
+
+    await finishLog(logId, {
+      status: "success", rows_read: rows.length, rows_upserted: upserted,
+      watermark_after: newMax?.toISOString(),
+    });
+    return { rows: rows.length, upserted };
+  } catch (err: any) {
+    await finishLog(logId, { status: "failed", error_message: err.message });
+    throw err;
+  }
+}
+
+async function syncApInvoices(runId: string) {
+  const entity = "ap_invoices";
+  const watermark = await getWatermark(entity);
+  const logId = await startLog({
+    entity, run_id: runId, status: "running",
+    watermark_before: watermark?.toISOString(),
+  });
+  try {
+    const rows: SapApInvoice[] = await fetchApInvoices(watermark ?? undefined);
+    console.log(`  [ap_invoices] read ${rows.length} rows from SAP`);
+
+    const mapped = rows.map((r) => ({
+      doc_entry: r.DocEntry,
+      doc_num: r.DocNum,
+      card_code: r.CardCode,
+      doc_date: safeDateOnly(r.DocDate)!,
+      doc_due_date: safeDateOnly(r.DocDueDate),
+      doc_total: r.DocTotalSy,
+      doc_currency: r.DocCur ?? "KES",
+      doc_rate: r.DocRate || 1,
+      paid_to_date: r.PaidToDate ?? 0,
+      doc_status: r.DocStatus,
+      cancelled: asBool(r.CANCELED),
+      sap_create_date: safeDate(r.CreateDate),
+      sap_update_date: safeDate(r.UpdateDate),
+      synced_at: new Date().toISOString(),
+    }));
+
+    const upserted = await upsertBatched("ap_invoices", mapped, "doc_entry");
+    const newMax = maxUpdateDate(rows);
+    if (newMax) await setWatermark(entity, newMax);
+
+    await finishLog(logId, {
+      status: "success", rows_read: rows.length, rows_upserted: upserted,
+      watermark_after: newMax?.toISOString(),
+    });
+    return { rows: rows.length, upserted };
+  } catch (err: any) {
+    await finishLog(logId, { status: "failed", error_message: err.message });
+    throw err;
+  }
+}
+
+async function syncPurchaseOrders(runId: string) {
+  const entity = "purchase_orders";
+  const watermark = await getWatermark(entity);
+  const logId = await startLog({
+    entity, run_id: runId, status: "running",
+    watermark_before: watermark?.toISOString(),
+  });
+  try {
+    const rows: SapPurchaseOrder[] = await fetchPurchaseOrders(watermark ?? undefined);
+    console.log(`  [purchase_orders] read ${rows.length} rows from SAP`);
+
+    const mapped = rows.map((r) => ({
+      doc_entry: r.DocEntry,
+      doc_num: r.DocNum,
+      card_code: r.CardCode,
+      doc_date: safeDateOnly(r.DocDate)!,
+      doc_due_date: safeDateOnly(r.DocDueDate),
+      doc_total: r.DocTotalSy,
+      doc_currency: r.DocCur ?? "KES",
+      doc_status: r.DocStatus,
+      cancelled: asBool(r.CANCELED),
+      sap_create_date: safeDate(r.CreateDate),
+      sap_update_date: safeDate(r.UpdateDate),
+      synced_at: new Date().toISOString(),
+    }));
+
+    const upserted = await upsertBatched("purchase_orders", mapped, "doc_entry");
+    const newMax = maxUpdateDate(rows);
+    if (newMax) await setWatermark(entity, newMax);
+
+    if (rows.length > 0) {
+      const docEntries = rows.map((r) => r.DocEntry);
+      const lineBatchSize = 500;
+      let allLines: SapPurchaseOrderLine[] = [];
+      for (let i = 0; i < docEntries.length; i += lineBatchSize) {
+        const slice = docEntries.slice(i, i + lineBatchSize);
+        const lines = await fetchPurchaseOrderLines(slice);
+        allLines = allLines.concat(lines);
+      }
+      console.log(`  [purchase_order_lines] read ${allLines.length} lines`);
+
+      const lineMapped = allLines.map((l) => ({
+        doc_entry: l.DocEntry,
+        line_num: l.LineNum,
+        item_code: l.ItemCode,
+        quantity: l.Quantity,
+        open_quantity: l.OpenQty,
+        price: l.Price,
+        line_total: l.LineTotal,
+      }));
+
+      if (lineMapped.length > 0) {
+        await upsertBatched("purchase_order_lines", lineMapped, "doc_entry,line_num");
+      }
+    }
+
+    await finishLog(logId, {
+      status: "success", rows_read: rows.length, rows_upserted: upserted,
+      watermark_after: newMax?.toISOString(),
+    });
+    return { rows: rows.length, upserted };
+  } catch (err: any) {
+    await finishLog(logId, { status: "failed", error_message: err.message });
+    throw err;
+  }
+}
+
 async function refreshDailySalesSummary() {
   console.log("  [daily_sales_summary] refreshing aggregate...");
   const cutoff = new Date();
@@ -384,6 +573,18 @@ async function main() {
 
     console.log("→ payments");
     await syncPayments(runId);
+
+    console.log("→ stock_snapshots");
+    await syncStockSnapshot(runId);
+
+    console.log("→ suppliers");
+    await syncSuppliers(runId);
+
+    console.log("→ ap_invoices");
+    await syncApInvoices(runId);
+
+    console.log("→ purchase_orders (+ lines)");
+    await syncPurchaseOrders(runId);
 
     console.log("→ refreshing aggregates");
     await refreshDailySalesSummary();

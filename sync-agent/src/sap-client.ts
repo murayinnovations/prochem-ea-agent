@@ -211,6 +211,128 @@ export interface SapPayment {
   UpdateDate: Date | null;
 }
 
+export interface SapSupplier {
+  CardCode: string;
+  CardName: string;
+  CardType: string;
+  Country: string | null;
+  Currency: string | null;
+  Balance: number | null;
+  validFor: string | null;
+  CreateDate: Date | null;
+  UpdateDate: Date | null;
+}
+
+export function fetchSuppliers(updatedSince?: Date) {
+  const filter = updatedSince
+    ? `WHERE CardType = 'S' AND UpdateDate >= @updatedSince`
+    : `WHERE CardType = 'S'`;
+  const query = `
+    SELECT CardCode, CardName, CardType, Country, Currency,
+           Balance, validFor, CreateDate, UpdateDate
+    FROM OCRD
+    ${filter}
+    ORDER BY UpdateDate ASC
+  `;
+  return querySap<SapSupplier>(query, updatedSince ? { updatedSince } : {});
+}
+
+export interface SapApInvoice {
+  DocEntry: number;
+  DocNum: number;
+  CardCode: string;
+  DocDate: Date;
+  DocDueDate: Date | null;
+  DocTotalSy: number;
+  DocCur: string;
+  DocRate: number;
+  PaidToDate: number;
+  DocStatus: string;
+  CANCELED: string;
+  CreateDate: Date | null;
+  UpdateDate: Date | null;
+}
+
+export function fetchApInvoices(updatedSince?: Date) {
+  const filter = updatedSince ? `WHERE UpdateDate >= @updatedSince` : ``;
+  const query = `
+    SELECT DocEntry, DocNum, CardCode, DocDate, DocDueDate,
+           DocTotalSy, DocCur, DocRate, PaidToDate, DocStatus, CANCELED,
+           CreateDate, UpdateDate
+    FROM OPCH
+    ${filter}
+    ORDER BY UpdateDate ASC
+  `;
+  return querySap<SapApInvoice>(query, updatedSince ? { updatedSince } : {});
+}
+
+export interface SapPurchaseOrder {
+  DocEntry: number;
+  DocNum: number;
+  CardCode: string;
+  DocDate: Date;
+  DocDueDate: Date | null;
+  DocTotalSy: number;
+  DocCur: string;
+  DocStatus: string;
+  CANCELED: string;
+  CreateDate: Date | null;
+  UpdateDate: Date | null;
+}
+
+export function fetchPurchaseOrders(updatedSince?: Date) {
+  const filter = updatedSince ? `WHERE UpdateDate >= @updatedSince` : ``;
+  const query = `
+    SELECT DocEntry, DocNum, CardCode, DocDate, DocDueDate,
+           DocTotalSy, DocCur, DocStatus, CANCELED,
+           CreateDate, UpdateDate
+    FROM OPOR
+    ${filter}
+    ORDER BY UpdateDate ASC
+  `;
+  return querySap<SapPurchaseOrder>(query, updatedSince ? { updatedSince } : {});
+}
+
+export interface SapPurchaseOrderLine {
+  DocEntry: number;
+  LineNum: number;
+  ItemCode: string;
+  Quantity: number;
+  OpenQty: number;
+  Price: number;
+  LineTotal: number;
+}
+
+export function fetchPurchaseOrderLines(docEntries: number[]) {
+  if (docEntries.length === 0) return Promise.resolve([]);
+  const list = docEntries.join(",");
+  const query = `
+    SELECT DocEntry, LineNum, ItemCode, Quantity, OpenQty, Price, LineTotal
+    FROM POR1
+    WHERE DocEntry IN (${list})
+  `;
+  return querySap<SapPurchaseOrderLine>(query);
+}
+
+export interface SapStockItem {
+  ItemCode: string;
+  WhsCode: string;
+  WhsName: string | null;
+  OnHand: number;
+  IsCommited: number;
+  OnOrder: number;
+}
+
+export function fetchStockSnapshot() {
+  const query = `
+    SELECT w.ItemCode, w.WhsCode, wh.WhsName, w.OnHand, w.IsCommited, w.OnOrder
+    FROM OITW w
+    LEFT JOIN OWHS wh ON w.WhsCode = wh.WhsCode
+    WHERE w.OnHand != 0 OR w.IsCommited != 0 OR w.OnOrder != 0
+  `;
+  return querySap<SapStockItem>(query);
+}
+
 export function fetchPayments(updatedSince?: Date) {
   const filter = updatedSince ? `WHERE UpdateDate >= @updatedSince` : ``;
   const query = `

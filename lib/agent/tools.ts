@@ -64,6 +64,22 @@ export const toolSchemas = {
     days: z.number().int().min(7).max(365).default(30),
     limit: z.number().int().min(1).max(50).default(20),
   }),
+
+  get_stock_position: z.object({
+    whs_code: z.string().optional().describe("Filter by warehouse code"),
+    limit: z.number().int().min(1).max(50).default(20),
+  }),
+
+  get_accounts_payable: z.object({}),
+
+  get_ap_invoices_summary: z.object({
+    period: PeriodSchema.optional().describe("Date range for AP invoices. Omit for all-time open invoices."),
+    status: z.enum(["O", "C"]).optional().describe("O = open, C = closed/paid. Defaults to open."),
+  }),
+
+  get_open_purchase_orders: z.object({
+    limit: z.number().int().min(1).max(50).default(20),
+  }),
 } as const;
 
 export type ToolName = keyof typeof toolSchemas;
@@ -462,6 +478,193 @@ export function createToolHandlers(db: DB) {
           : "slp_name is NULL for all invoices in this period — sales employee data will populate after the next SAP sync.",
       };
     },
+
+    // ── get_stock_position ──────────────────────────────────────────────────
+    async get_stock_position(args: z.infer<typeof toolSchemas.get_stock_position>) {
+      const { data: latestRow } = await db
+        .from("stock_snapshots")
+        .select("snapshot_at")
+        .order("snapshot_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!latestRow) {
+        return {
+          snapshot_at: null,
+          items: [],
+          note: "No stock snapshots yet — run the sync agent on PROCHEMSVR to capture inventory positions.",
+        };
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let q: any = db
+        .from("stock_snapshots")
+        .select("item_code, whs_code, on_hand, committed, available")
+        .eq("snapshot_at", latestRow.snapshot_at);
+      if (args.whs_code) q = q.eq("whs_code", args.whs_code);
+      const { data } = await q;
+
+      const map = new Map<string, { on_hand: number; available: number; warehouses: string[] }>();
+      for (const r of data ?? []) {
+        const code = r.item_code as string;
+        const prev = map.get(code) ?? { on_hand: 0, available: 0, warehouses: [] };
+        const whs = r.whs_code as string;
+        map.set(code, {
+          on_hand: prev.on_hand + Number(r.on_hand ?? 0),
+          available: prev.available + Number(r.available ?? 0),
+          warehouses: prev.warehouses.includes(whs) ? prev.warehouses : [...prev.warehouses, whs],
+        });
+      }
+
+      const topCodes = Array.from(map.entries())
+        .sort((a, b) => b[1].on_hand - a[1].on_hand)
+        .slice(0, args.limit)
+        .map(([code]) => code);
+
+      const { data: items } = await db
+        .from("items")
+        .select("item_code, item_name, inventory_uom")
+        .in("item_code", topCodes);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const itemMap = new Map((items ?? []).map((i: any) => [i.item_code as string, i]));
+
+      return {
+        snapshot_at: latestRow.snapshot_at,
+        items: topCodes.map((code) => {
+          const agg = map.get(code)!;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const item = itemMap.get(code) as any;
+          return {
+            item_code: code,
+            item_name: (item?.item_name as string | null) ?? code,
+            inventory_uom: (item?.inventory_uom as string | null) ?? null,
+            on_hand: agg.on_hand,
+            available: agg.available,
+            warehouse_count: agg.warehouses.length,
+          };
+        }),
+      };
+    },
+
+    // ── get_accounts_payable ────────────────────────────────────────────────
+    async get_accounts_payable(
+      _args: z.infer<typeof toolSchemas.get_accounts_payable>
+    ) {
+      const [balResult, apCountResult] = await Promise.all([
+        db
+          .from("suppliers")
+          .select("card_code, card_name, balance")
+          .eq("valid", true)
+          .gt("balance", 0)
+          .order("balance", { ascending: false }),
+        db
+          .from("ap_invoices")
+          .select("*", { count: "exact", head: true })
+          .eq("doc_status", "O")
+          .eq("cancelled", false),
+      ]);
+
+      const suppliers = balResult.data ?? [];
+      const totalPayables = suppliers.reduce((s, r) => s + Number(r.balance ?? 0), 0);
+
+      return {
+        total_payables_kes: totalPayables,
+        supplier_count: suppliers.length,
+        open_ap_invoice_count: apCountResult.count ?? 0,
+        top_creditors: suppliers.slice(0, 10).map((r) => ({
+          card_code: r.card_code,
+          card_name: (r.card_name as string | null) ?? r.card_code,
+          balance_kes: Number(r.balance ?? 0),
+        })),
+        note:
+          suppliers.length === 0
+            ? "No supplier data yet — run the sync to populate the suppliers table from SAP OCRD."
+            : undefined,
+      };
+    },
+
+    // ── get_ap_invoices_summary ─────────────────────────────────────────────
+    async get_ap_invoices_summary(
+      args: z.infer<typeof toolSchemas.get_ap_invoices_summary>
+    ) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let q: any = db
+        .from("ap_invoices")
+        .select("doc_total, paid_to_date, card_code, doc_date, doc_status")
+        .eq("cancelled", false);
+
+      const status = args.status ?? "O";
+      q = q.eq("doc_status", status);
+
+      if (args.period) {
+        q = q.gte("doc_date", args.period.start).lte("doc_date", args.period.end);
+      }
+
+      const { data } = await q;
+      const rows = (data ?? []) as Array<Record<string, unknown>>;
+
+      let totalAmount = 0;
+      let totalOutstanding = 0;
+      const bySupplier = new Map<string, { amount: number; count: number }>();
+
+      for (const r of rows) {
+        const amt = Number(r.doc_total ?? 0);
+        const paid = Number(r.paid_to_date ?? 0);
+        const outstanding = Math.max(0, amt - paid);
+        totalAmount += amt;
+        totalOutstanding += outstanding;
+        const cc = r.card_code as string;
+        const prev = bySupplier.get(cc) ?? { amount: 0, count: 0 };
+        bySupplier.set(cc, { amount: prev.amount + outstanding, count: prev.count + 1 });
+      }
+
+      const topSuppliers = Array.from(bySupplier.entries())
+        .sort((a, b) => b[1].amount - a[1].amount)
+        .slice(0, 10)
+        .map(([card_code, { amount, count }]) => ({ card_code, outstanding_kes: amount, invoice_count: count }));
+
+      return {
+        status,
+        period: args.period ?? "all-time",
+        invoice_count: rows.length,
+        total_amount_kes: totalAmount,
+        total_outstanding_kes: totalOutstanding,
+        top_suppliers_by_outstanding: topSuppliers,
+      };
+    },
+
+    // ── get_open_purchase_orders ────────────────────────────────────────────
+    async get_open_purchase_orders(
+      args: z.infer<typeof toolSchemas.get_open_purchase_orders>
+    ) {
+      const { data } = await db
+        .from("purchase_orders")
+        .select("doc_entry, doc_num, card_code, doc_date, doc_due_date, doc_total, doc_currency")
+        .eq("doc_status", "O")
+        .eq("cancelled", false)
+        .order("doc_total", { ascending: false })
+        .limit(args.limit);
+
+      const rows = data ?? [];
+      const totalValue = rows.reduce((s, r) => s + Number(r.doc_total ?? 0), 0);
+
+      return {
+        open_po_count: rows.length,
+        total_value_kes: totalValue,
+        purchase_orders: rows.map((r) => ({
+          doc_num: r.doc_num ?? r.doc_entry,
+          card_code: r.card_code,
+          doc_date: r.doc_date,
+          doc_due_date: r.doc_due_date,
+          doc_total_kes: Number(r.doc_total ?? 0),
+          doc_currency: r.doc_currency,
+        })),
+        note:
+          rows.length === 0
+            ? "No open purchase orders — either none exist in SAP or the sync has not run yet."
+            : undefined,
+      };
+    },
   };
 }
 
@@ -488,6 +691,14 @@ const descriptions: Record<ToolName, string> = {
     "Revenue, invoice count, and outstanding AR per sales employee for a period. Returns '(unassigned)' rows when slp_name is not yet synced.",
   get_fast_moving_skus:
     "Top N SKUs ranked by sales volume over the last N days, with velocity (units/day), product revenue, and % trend vs the equivalent prior period. Use for questions about fastest-moving products, trending items, or SKU velocity.",
+  get_stock_position:
+    "Current on-hand, committed, and available inventory per SKU from the latest SAP OITW snapshot. Optionally filter by warehouse code. Returns empty with a note if no snapshot exists yet.",
+  get_accounts_payable:
+    "Total payables balance across all suppliers, count of open A/P invoices, and top 10 creditors by SAP OCRD balance. Use for questions about what Prochem owes suppliers.",
+  get_ap_invoices_summary:
+    "Summary of A/P invoices (from OPCH): invoice count, total amount, outstanding balance, and top suppliers by outstanding. Filter by status (O=open, C=closed) and optional date range.",
+  get_open_purchase_orders:
+    "Open purchase orders from SAP OPOR, ranked by value. Returns count, total committed value, and individual PO details. Use for questions about pending procurement.",
 };
 
 export function getToolsForAnthropic() {
