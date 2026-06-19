@@ -88,6 +88,53 @@ function today() {
   return new Date();
 }
 
+// ── getCustomersPortfolioKpis ─────────────────────────────────────────────────
+//
+// These KPIs MUST be unscoped portfolio-wide aggregates — never derived from a
+// paginated row set or filtered by the page's user-facing filters (search,
+// country, activeOnly). If a new KPI is added here, follow the same
+// direct-query-or-batched-pagination pattern.
+export const getCustomersPortfolioKpis = unstable_cache(
+  async (): Promise<{ rev30Total: number; arTotal: number }> => {
+    const supabase = createAdminClient();
+    const d30 = format(subDays(new Date(), 30), "yyyy-MM-dd");
+
+    // Revenue 30d — paginated to clear PostgREST's 1000-row cap
+    let rev30Total = 0;
+    for (let page = 0; page < 200; page++) {
+      const { data } = await supabase
+        .from("invoices")
+        .select("doc_total, vat_sum")
+        .gte("doc_date", d30)
+        .eq("cancelled", false)
+        .range(page * 1000, (page + 1) * 1000 - 1);
+      const rows = data ?? [];
+      for (const r of rows)
+        rev30Total += Number(r.doc_total ?? 0) - Number(r.vat_sum ?? 0);
+      if (rows.length < 1000) break;
+    }
+
+    // AR total — fixed filters only: card_type=C, valid=true, balance>0
+    let arTotal = 0;
+    for (let page = 0; page < 200; page++) {
+      const { data } = await supabase
+        .from("customers")
+        .select("balance")
+        .eq("card_type", "C")
+        .eq("valid", true)
+        .gt("balance", 0)
+        .range(page * 1000, (page + 1) * 1000 - 1);
+      const rows = data ?? [];
+      for (const r of rows) arTotal += Number(r.balance ?? 0);
+      if (rows.length < 1000) break;
+    }
+
+    return { rev30Total, arTotal };
+  },
+  ["customers-portfolio-kpis"],
+  { revalidate: 60 },
+);
+
 // ── listCustomers ─────────────────────────────────────────────────────────────
 
 export const listCustomers = unstable_cache(
@@ -113,21 +160,9 @@ export const listCustomers = unstable_cache(
       supabase.from("customers").select("*", { count: "exact", head: true }).eq("card_type", "C")
     );
     const total = exactCount ?? 0;
-    if (total === 0) return { rows: [] as CustomerRow[], total: 0, arTotal: 0 };
+    if (total === 0) return { rows: [] as CustomerRow[], total: 0 };
 
-    // ── 2. AR total — paginated SUM across ALL matching customers ─────────────
-    // Each loop fetches 1000 rows to clear PostgREST's default row cap.
-    let arTotal = 0;
-    for (let page = 0; page < 200; page++) {
-      const { data: balPage } = await af(
-        supabase.from("customers").select("balance").eq("card_type", "C").gt("balance", 0)
-      ).range(page * 1000, (page + 1) * 1000 - 1);
-      const balRows = balPage ?? [];
-      for (const r of balRows) arTotal += Number(r.balance ?? 0);
-      if (balRows.length < 1000) break;
-    }
-
-    // ── 3. Customer rows for this page ────────────────────────────────────────
+    // ── 2. Customer rows for this page ────────────────────────────────────────
     const ascending = f.sortDir === "asc";
     let customers: Array<Record<string, unknown>>;
 
@@ -156,7 +191,7 @@ export const listCustomers = unstable_cache(
       customers = (data ?? []) as Array<Record<string, unknown>>;
     }
 
-    if (customers.length === 0) return { rows: [] as CustomerRow[], total, arTotal };
+    if (customers.length === 0) return { rows: [] as CustomerRow[], total };
 
     const codes = customers.map((c) => c.card_code as string);
 
@@ -229,7 +264,7 @@ export const listCustomers = unstable_cache(
       rows = rows.slice(pageStart, pageStart + f.pageSize);
     }
 
-    return { rows, total, arTotal };
+    return { rows, total };
   },
   ["customers-list"],
   { revalidate: 60 },

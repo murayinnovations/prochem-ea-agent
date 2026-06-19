@@ -2,10 +2,12 @@ import { z } from "zod";
 
 const pageInt = z.coerce.number().int().min(1).catch(1);
 const pageSizeInt = z.coerce.number().int().min(10).max(200).catch(50);
-const bool = z.coerce
+// z.coerce.string() converts undefined → "undefined", making .catch(true) unreachable.
+// Use optional string: missing/undefined → true, "false" → false, anything else → true.
+const bool = z
   .string()
-  .transform((v) => v === "true")
-  .catch(true);
+  .optional()
+  .transform((v) => v !== "false");
 
 export const customersFilterSchema = z.object({
   search:     z.string().catch(""),

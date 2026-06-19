@@ -6,7 +6,7 @@ import { Pagination } from "@/components/dashboard/pagination";
 import { KpiStat } from "@/components/dashboard/kpi-stat";
 import { CustomersFilters } from "./_customers-filters";
 import { CustomersTable } from "./_customers-table";
-import { listCustomers, getCustomerCountries } from "@/lib/queries/customers";
+import { listCustomers, getCustomerCountries, getCustomersPortfolioKpis } from "@/lib/queries/customers";
 import { customersFilterSchema } from "@/lib/filters/schema";
 import { parseSearchParams } from "@/lib/filters/parse";
 import { formatKES } from "@/lib/formatters";
@@ -19,12 +19,11 @@ export default async function CustomersPage({ searchParams }: Props) {
   const params = await searchParams;
   const filters = parseSearchParams(customersFilterSchema, params);
 
-  const [{ rows, total, arTotal }, countries] = await Promise.all([
+  const [{ rows, total }, countries, { rev30Total, arTotal }] = await Promise.all([
     listCustomers(filters),
     getCustomerCountries(),
+    getCustomersPortfolioKpis(),
   ]);
-
-  const totalRev30 = rows.reduce((s, r) => s + r.revenue30d, 0);
 
   return (
     <div>
@@ -35,7 +34,7 @@ export default async function CustomersPage({ searchParams }: Props) {
 
       <div className="mb-6 grid grid-cols-3 gap-4">
         <KpiStat label="Customers shown" value={total.toLocaleString()} icon={Users} />
-        <KpiStat label="Revenue (30d)" value={formatKES(totalRev30)} />
+        <KpiStat label="Revenue (30d)" value={formatKES(rev30Total)} />
         <KpiStat label="Outstanding AR" value={formatKES(arTotal)} />
       </div>
 
