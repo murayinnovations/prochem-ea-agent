@@ -148,8 +148,8 @@ export class RealSapClient implements SapClient {
   getInvoices(q?: SyncQuery) {
     return this.fetchAll("/b1s/v1/Invoices", SapInvoice, q);
   }
-  async getPayments(_q?: SyncQuery) { throw new Error("TODO"); }
-  async getFxRates(_q?: SyncQuery) { throw new Error("TODO"); }
+  async getPayments(_q?: SyncQuery): Promise<unknown[]> { throw new Error("TODO"); }
+  async getFxRates(_q?: SyncQuery): Promise<unknown[]> { throw new Error("TODO"); }
 }
 
 // ============================================================
