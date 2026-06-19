@@ -59,6 +59,11 @@ export const toolSchemas = {
   get_sales_employee_breakdown: z.object({
     period: PeriodSchema,
   }),
+
+  get_fast_moving_skus: z.object({
+    days: z.number().int().min(7).max(365).default(30),
+    limit: z.number().int().min(1).max(50).default(20),
+  }),
 } as const;
 
 export type ToolName = keyof typeof toolSchemas;
@@ -338,6 +343,83 @@ export function createToolHandlers(db: DB) {
       };
     },
 
+    // ── get_fast_moving_skus ────────────────────────────────────────────────
+    async get_fast_moving_skus(
+      args: z.infer<typeof toolSchemas.get_fast_moving_skus>,
+    ) {
+      const now = new Date();
+      const fmt = (d: Date) => d.toISOString().split("T")[0];
+      const dNow = fmt(now);
+      const dCurrent = fmt(new Date(now.getTime() - args.days * 86_400_000));
+      const dPrior = fmt(new Date(now.getTime() - args.days * 2 * 86_400_000));
+
+      const [currRes, priorRes] = await Promise.all([
+        db.from("invoice_lines")
+          .select("item_code, quantity, line_total")
+          .gte("doc_date", dCurrent)
+          .lte("doc_date", dNow),
+        db.from("invoice_lines")
+          .select("item_code, quantity")
+          .gte("doc_date", dPrior)
+          .lt("doc_date", dCurrent),
+      ]);
+
+      const currVol = new Map<string, number>();
+      const currRev = new Map<string, number>();
+      for (const r of currRes.data ?? []) {
+        const code = r.item_code as string;
+        currVol.set(code, (currVol.get(code) ?? 0) + Number(r.quantity ?? 0));
+        currRev.set(code, (currRev.get(code) ?? 0) + Number(r.line_total ?? 0));
+      }
+
+      const priorVol = new Map<string, number>();
+      for (const r of priorRes.data ?? []) {
+        const code = r.item_code as string;
+        priorVol.set(code, (priorVol.get(code) ?? 0) + Number(r.quantity ?? 0));
+      }
+
+      const topCodes = Array.from(currVol.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, args.limit)
+        .map(([code]) => code);
+
+      const itemMap = new Map<string, string | null>();
+      if (topCodes.length > 0) {
+        const { data: items } = await db.from("items")
+          .select("item_code, item_name, inventory_uom")
+          .in("item_code", topCodes);
+        for (const it of items ?? [])
+          itemMap.set(it.item_code as string, it.item_name as string | null);
+      }
+
+      const skus = topCodes.map((code) => {
+        const vol = currVol.get(code) ?? 0;
+        const rev = currRev.get(code) ?? 0;
+        const priorV = priorVol.get(code) ?? 0;
+        const trend_pct = priorV > 0
+          ? Math.round(((vol - priorV) / priorV) * 1000) / 10
+          : null;
+        return {
+          item_code: code,
+          item_name: itemMap.get(code) ?? code,
+          total_volume: vol,
+          velocity_per_day: Math.round((vol / args.days) * 100) / 100,
+          total_revenue_kes: rev,
+          prior_period_volume: priorV,
+          trend_pct,
+        };
+      });
+
+      const noTrendCount = skus.filter((s) => s.trend_pct === null).length;
+      return {
+        period_days: args.days,
+        skus,
+        ...(noTrendCount > 0
+          ? { note: `${noTrendCount} SKU(s) have no prior-period sales — trend shown as null (new or seasonal items).` }
+          : {}),
+      };
+    },
+
     // ── get_sales_employee_breakdown ────────────────────────────────────────
     async get_sales_employee_breakdown(
       args: z.infer<typeof toolSchemas.get_sales_employee_breakdown>,
@@ -404,6 +486,8 @@ const descriptions: Record<ToolName, string> = {
     "Most recent N payments received, with customer names and amounts.",
   get_sales_employee_breakdown:
     "Revenue, invoice count, and outstanding AR per sales employee for a period. Returns '(unassigned)' rows when slp_name is not yet synced.",
+  get_fast_moving_skus:
+    "Top N SKUs ranked by sales volume over the last N days, with velocity (units/day), product revenue, and % trend vs the equivalent prior period. Use for questions about fastest-moving products, trending items, or SKU velocity.",
 };
 
 export function getToolsForAnthropic() {

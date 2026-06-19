@@ -282,6 +282,151 @@ export const getSkuDetail = unstable_cache(
   { revalidate: 300 },
 );
 
+// ── getFastMovingSkus ─────────────────────────────────────────────────────────
+
+export interface FastMovingSku {
+  item_code: string;
+  item_name: string | null;
+  items_group_name: string | null;
+  inventory_uom: string | null;
+  total_volume: number;
+  total_revenue: number;
+  velocity_per_day: number;
+  prior_period_volume: number;
+  trend_pct: number | null;
+}
+
+export const getFastMovingSkus = unstable_cache(
+  async ({ days = 30, limit = 20 }: { days?: number; limit?: number } = {}): Promise<FastMovingSku[]> => {
+    const supabase = createAdminClient();
+    const now = today();
+    const dNow = format(now, "yyyy-MM-dd");
+    const dCurrent = format(subDays(now, days), "yyyy-MM-dd");
+    const dPrior = format(subDays(now, days * 2), "yyyy-MM-dd");
+
+    const [currRes, priorRes] = await Promise.all([
+      supabase
+        .from("invoice_lines")
+        .select("item_code, quantity, line_total")
+        .gte("doc_date", dCurrent)
+        .lte("doc_date", dNow),
+      supabase
+        .from("invoice_lines")
+        .select("item_code, quantity")
+        .gte("doc_date", dPrior)
+        .lt("doc_date", dCurrent),
+    ]);
+
+    const currVol = new Map<string, number>();
+    const currRev = new Map<string, number>();
+    for (const r of currRes.data ?? []) {
+      const code = r.item_code as string;
+      currVol.set(code, (currVol.get(code) ?? 0) + Number(r.quantity ?? 0));
+      currRev.set(code, (currRev.get(code) ?? 0) + Number(r.line_total ?? 0));
+    }
+
+    const priorVol = new Map<string, number>();
+    for (const r of priorRes.data ?? []) {
+      const code = r.item_code as string;
+      priorVol.set(code, (priorVol.get(code) ?? 0) + Number(r.quantity ?? 0));
+    }
+
+    if (currVol.size === 0) return [];
+
+    const topCodes = Array.from(currVol.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, limit)
+      .map(([code]) => code);
+
+    const itemMap = new Map<string, { item_name: string | null; items_group_name: string | null; inventory_uom: string | null }>();
+    for (let i = 0; i < topCodes.length; i += 200) {
+      const { data } = await supabase
+        .from("items")
+        .select("item_code, item_name, items_group_name, inventory_uom")
+        .in("item_code", topCodes.slice(i, i + 200));
+      for (const it of data ?? []) {
+        itemMap.set(it.item_code as string, {
+          item_name: it.item_name as string | null,
+          items_group_name: it.items_group_name as string | null,
+          inventory_uom: it.inventory_uom as string | null,
+        });
+      }
+    }
+
+    return topCodes.map((code) => {
+      const vol = currVol.get(code) ?? 0;
+      const rev = currRev.get(code) ?? 0;
+      const priorV = priorVol.get(code) ?? 0;
+      const trend_pct = priorV > 0
+        ? Math.round(((vol - priorV) / priorV) * 1000) / 10
+        : null;
+      const item = itemMap.get(code);
+      return {
+        item_code: code,
+        item_name: item?.item_name ?? null,
+        items_group_name: item?.items_group_name ?? null,
+        inventory_uom: item?.inventory_uom ?? null,
+        total_volume: vol,
+        total_revenue: rev,
+        velocity_per_day: Math.round((vol / days) * 100) / 100,
+        prior_period_volume: priorV,
+        trend_pct,
+      };
+    });
+  },
+  ["brands-fast-moving-skus"],
+  { revalidate: 300 },
+);
+
+// ── getSkuVolumeTrend ─────────────────────────────────────────────────────────
+
+export interface WeeklyVolumeTrend {
+  week_start: string;
+  volume: number;
+  revenue_kes: number;
+}
+
+export const getSkuVolumeTrend = unstable_cache(
+  async (item_code: string, weeks = 12): Promise<WeeklyVolumeTrend[]> => {
+    const supabase = createAdminClient();
+    const start = format(subDays(today(), weeks * 7), "yyyy-MM-dd");
+
+    const { data } = await supabase
+      .from("invoice_lines")
+      .select("doc_date, quantity, line_total")
+      .eq("item_code", item_code)
+      .gte("doc_date", start);
+
+    function toWeekStart(dateStr: string): string {
+      const d = new Date(dateStr + "T00:00:00Z");
+      const day = d.getUTCDay();
+      const diff = day === 0 ? -6 : 1 - day;
+      d.setUTCDate(d.getUTCDate() + diff);
+      return d.toISOString().split("T")[0];
+    }
+
+    const byWeek = new Map<string, { vol: number; rev: number }>();
+    for (const r of data ?? []) {
+      const ws = toWeekStart(r.doc_date as string);
+      const prev = byWeek.get(ws) ?? { vol: 0, rev: 0 };
+      byWeek.set(ws, {
+        vol: prev.vol + Number(r.quantity ?? 0),
+        rev: prev.rev + Number(r.line_total ?? 0),
+      });
+    }
+
+    return Array.from(byWeek.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([week_start, { vol, rev }]) => ({
+        week_start,
+        volume: vol,
+        revenue_kes: rev,
+      }));
+  },
+  ["brands-sku-volume-trend"],
+  { revalidate: 300 },
+);
+
 // ── getItemGroups ─────────────────────────────────────────────────────────────
 
 export const getItemGroups = unstable_cache(

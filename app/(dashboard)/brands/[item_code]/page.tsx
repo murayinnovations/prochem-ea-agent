@@ -5,7 +5,8 @@ import { PageHeader } from "@/components/dashboard/page-header";
 import { KpiStat } from "@/components/dashboard/kpi-stat";
 import { StatusBadge } from "@/components/dashboard/status-badge";
 import { MonthlyRevenueChart } from "@/components/charts/monthly-revenue-chart";
-import { getSkuDetail } from "@/lib/queries/brands";
+import { WeeklyVolumeChart } from "@/components/charts/weekly-volume-chart";
+import { getSkuDetail, getSkuVolumeTrend } from "@/lib/queries/brands";
 import { formatKES, formatDate } from "@/lib/formatters";
 
 interface Props {
@@ -16,7 +17,11 @@ export default async function SkuDetailPage({ params }: Props) {
   const { item_code } = await params;
   const code = decodeURIComponent(item_code);
 
-  const sku = await getSkuDetail(code);
+  const [sku, weeklyTrend] = await Promise.all([
+    getSkuDetail(code),
+    getSkuVolumeTrend(code, 12),
+  ]);
+
   if (!sku) notFound();
 
   return (
@@ -98,10 +103,21 @@ export default async function SkuDetailPage({ params }: Props) {
           )}
         </div>
 
-        {/* Right — trend */}
-        <div className="lg:col-span-2">
+        {/* Right — charts */}
+        <div className="space-y-6 lg:col-span-2">
+          {/* Weekly volume trend */}
           <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="mb-4 text-sm font-semibold text-slate-900">Revenue (12 months)</h2>
+            <h2 className="mb-4 text-sm font-semibold text-slate-900">Weekly sales volume (12 weeks)</h2>
+            {weeklyTrend.length > 0 ? (
+              <WeeklyVolumeChart data={weeklyTrend} />
+            ) : (
+              <p className="py-8 text-center text-sm text-slate-400">No sales in the last 12 weeks.</p>
+            )}
+          </div>
+
+          {/* Monthly revenue trend */}
+          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="mb-4 text-sm font-semibold text-slate-900">Product revenue (12 months)</h2>
             {sku.revenue_trend.length > 0 ? (
               <MonthlyRevenueChart data={sku.revenue_trend} color="#f59e0b" />
             ) : (
