@@ -11,6 +11,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { Markdown } from "./markdown";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -86,7 +87,7 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
             : "bg-slate-100 text-slate-800",
         )}
       >
-        {msg.text}
+        {isUser ? msg.text : <Markdown content={msg.text} />}
       </div>
     </div>
   );

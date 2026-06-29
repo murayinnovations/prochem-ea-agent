@@ -91,6 +91,11 @@ export const toolSchemas = {
   get_open_purchase_orders: z.object({
     limit: z.number().int().min(1).max(50).default(20),
   }),
+
+  get_top_invoices: z.object({
+    period: PeriodSchema,
+    limit: z.number().int().min(1).max(MAX_ROWS).default(10),
+  }),
 } as const;
 
 export type ToolName = keyof typeof toolSchemas;
@@ -723,6 +728,36 @@ export function createToolHandlers(db: DB) {
             : undefined,
       };
     },
+
+    // ── get_top_invoices ────────────────────────────────────────────────────
+    async get_top_invoices(args: z.infer<typeof toolSchemas.get_top_invoices>) {
+      const { data } = await db
+        .from("invoices")
+        .select("doc_num, doc_date, doc_total, vat_sum, card_code, doc_status")
+        .gte("doc_date", args.period.start)
+        .lte("doc_date", args.period.end)
+        .eq("cancelled", false)
+        .order("doc_total", { ascending: false })
+        .limit(args.limit);
+
+      const rows = data ?? [];
+      const codes = [...new Set(rows.map((r) => r.card_code))];
+      const names = await resolveCustomerNames(db, codes);
+
+      return {
+        period: args.period,
+        invoices: rows.map((r) => ({
+          doc_num: r.doc_num,
+          doc_date: r.doc_date,
+          customer: names[r.card_code] ?? r.card_code,
+          card_code: r.card_code,
+          gross_kes: Number(r.doc_total ?? 0),
+          net_kes: Number(r.doc_total ?? 0) - Number(r.vat_sum ?? 0),
+          status: r.doc_status,
+        })),
+        count: rows.length,
+      };
+    },
   };
 }
 
@@ -757,6 +792,8 @@ const descriptions: Record<ToolName, string> = {
     "Summary of A/P invoices (from OPCH): invoice count, total amount, outstanding balance, and top suppliers by outstanding. Filter by status (O=open, C=closed) and optional date range.",
   get_open_purchase_orders:
     "Open purchase orders from SAP OPOR, ranked by value. Returns count, total committed value, and individual PO details. Use for questions about pending procurement.",
+  get_top_invoices:
+    "Top N individual invoices ranked by gross amount for a period. Returns invoice number, date, customer name, gross KES, net KES (ex-VAT), and status. Use when the user asks to see the biggest invoices, largest transactions, or wants a drill-down into specific invoice-level detail.",
 };
 
 export function getToolsForAnthropic() {
