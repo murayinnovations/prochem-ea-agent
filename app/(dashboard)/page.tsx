@@ -1,9 +1,9 @@
 import { Suspense } from "react";
 import { format, subDays } from "date-fns";
 import { TrendingUp, Receipt, Users, Clock } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import {
   Card,
-  CardAction,
   CardContent,
   CardHeader,
   CardTitle,
@@ -24,7 +24,7 @@ import { RevenueAreaChart } from "@/components/charts/revenue-area-chart";
 import { TopCustomersChart } from "@/components/charts/top-customers-chart";
 import { cn } from "@/lib/utils";
 
-// ── date helpers ──────────────────────────────────────────────────────────────
+// ── helpers ───────────────────────────────────────────────────────────────────
 
 function cutoffs() {
   const today = new Date();
@@ -36,20 +36,29 @@ function cutoffs() {
 
 // ── skeleton placeholders ─────────────────────────────────────────────────────
 
-function KpiGridSkeleton() {
+function HeroSkeleton() {
   return (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-      {Array.from({ length: 4 }).map((_, i) => (
-        <Card key={i}>
-          <CardHeader>
-            <Skeleton className="h-3 w-28" />
-          </CardHeader>
-          <CardContent>
-            <Skeleton className="h-8 w-36" />
-            <Skeleton className="mt-2 h-3 w-20" />
-          </CardContent>
-        </Card>
-      ))}
+    <div className="overflow-hidden rounded-2xl bg-[#0A1B3D] px-8 py-9">
+      <Skeleton className="h-2.5 w-36 bg-white/10" />
+      <Skeleton className="mt-4 h-12 w-56 bg-white/10" />
+      <Skeleton className="mt-4 h-2.5 w-80 bg-white/10" />
+    </div>
+  );
+}
+
+function HeroAndKpiSkeleton() {
+  return (
+    <div className="space-y-4">
+      <HeroSkeleton />
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <Skeleton className="h-2.5 w-28" />
+            <Skeleton className="mt-3 h-8 w-36" />
+            <Skeleton className="mt-2 h-2.5 w-20" />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -67,71 +76,69 @@ function CardSkeleton({ height = 280 }: { height?: number }) {
   );
 }
 
-// ── Data freshness ────────────────────────────────────────────────────────────
+// ── MetricCard ────────────────────────────────────────────────────────────────
 
-async function DataFreshnessNote() {
-  const supabase = await createServerClient();
-  const { data } = await supabase
-    .from("invoices")
-    .select("doc_date")
-    .eq("cancelled", false)
-    .order("doc_date", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (!data?.doc_date) return null;
-
-  const latest = data.doc_date as string;
-  const daysDiff = Math.floor(
-    (Date.now() - new Date(latest).getTime()) / 86_400_000,
-  );
-  const label =
-    daysDiff === 0
-      ? "today"
-      : daysDiff === 1
-        ? "yesterday"
-        : `${daysDiff} days ago`;
-
+function MetricCard({
+  label,
+  value,
+  sublabel,
+  icon: Icon,
+}: {
+  label: string;
+  value: string;
+  sublabel: string;
+  icon: LucideIcon;
+}) {
   return (
-    <span className="text-xs text-slate-400">
-      Data through{" "}
-      <span className={daysDiff > 2 ? "text-amber-500 font-medium" : "text-slate-500 font-medium"}>
-        {formatDate(latest)}
-      </span>{" "}
-      ({label})
-    </span>
+    <div className="flex items-start justify-between rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="min-w-0 flex-1">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+          {label}
+        </p>
+        <p className="mt-2 text-2xl font-bold tracking-tight text-slate-900">
+          {value}
+        </p>
+        <p className="mt-0.5 text-xs text-slate-400">{sublabel}</p>
+      </div>
+      <div className="ml-4 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-50">
+        <Icon className="h-4 w-4 text-amber-500" />
+      </div>
+    </div>
   );
 }
 
-// ── KPI section ───────────────────────────────────────────────────────────────
+// ── Hero + KPI section (single fetch, single Suspense) ────────────────────────
 
-async function KpiSection() {
+async function HeroAndKpiSection() {
   const supabase = await createServerClient();
   const { d30 } = cutoffs();
+  const todayStr = format(new Date(), "yyyy-MM-dd");
 
   const [revResult, cntResult, codesResult, custResult, arCntResult] =
     await Promise.all([
       supabase
         .from("invoices")
-        .select("doc_total")
+        .select("doc_total, vat_sum")
         .gte("doc_date", d30)
+        .lte("doc_date", todayStr)
         .eq("cancelled", false),
       supabase
         .from("invoices")
         .select("*", { count: "exact", head: true })
         .gte("doc_date", d30)
+        .lte("doc_date", todayStr)
         .eq("cancelled", false),
       supabase
         .from("invoices")
         .select("card_code")
         .gte("doc_date", d30)
+        .lte("doc_date", todayStr)
         .eq("cancelled", false),
       supabase
         .from("customers")
         .select("*", { count: "exact", head: true })
         .eq("card_type", "C")
         .eq("valid", true),
-      // Open invoice count is a separate metric ("across N open invoices")
       supabase
         .from("invoices")
         .select("*", { count: "exact", head: true })
@@ -155,7 +162,7 @@ async function KpiSection() {
   }
 
   const revenue30d = (revResult.data ?? []).reduce(
-    (s, r) => s + Number(r.doc_total ?? 0),
+    (s, r) => s + Number(r.doc_total ?? 0) - Number(r.vat_sum ?? 0),
     0,
   );
   const invoiceCount = cntResult.count ?? 0;
@@ -165,83 +172,105 @@ async function KpiSection() {
   const totalCustomers = custResult.count ?? 0;
   const arCount = arCntResult.count ?? 0;
 
+  // Latest invoice date for freshness
+  const { data: latestInv } = await supabase
+    .from("invoices")
+    .select("doc_date")
+    .eq("cancelled", false)
+    .order("doc_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const latestDate = latestInv?.doc_date as string | null;
+  const daysDiff = latestDate
+    ? Math.floor((Date.now() - new Date(latestDate).getTime()) / 86_400_000)
+    : null;
+  const freshnessLabel =
+    daysDiff === null
+      ? null
+      : daysDiff === 0
+        ? "updated today"
+        : daysDiff === 1
+          ? "updated yesterday"
+          : `updated ${daysDiff}d ago`;
+
   return (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-      {/* Revenue */}
-      <Card className="border-emerald-100 bg-emerald-50">
-        <CardHeader>
-          <CardTitle className="text-xs font-semibold uppercase tracking-wider text-emerald-700">
-            Total Revenue (30d)
-          </CardTitle>
-          <CardAction>
-            <TrendingUp className="h-4 w-4 text-emerald-500" />
-          </CardAction>
-        </CardHeader>
-        <CardContent>
-          <p className="text-2xl font-bold tracking-tight text-slate-900">
-            {formatKES(revenue30d)}
-          </p>
-          <p className="mt-1 text-xs text-slate-400">last 30 days, invoiced</p>
-        </CardContent>
-      </Card>
+    <div className="space-y-4">
+      {/* ── Hero gradient strip ───────────────────────────────────────── */}
+      <div
+        className="relative overflow-hidden rounded-2xl px-8 py-9"
+        style={{
+          background:
+            "linear-gradient(135deg, #0A1B3D 0%, #0F2554 55%, #162E66 100%)",
+        }}
+      >
+        {/* Amber top-border accent */}
+        <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-amber-500 via-amber-400/60 to-transparent" />
+        {/* Decorative glow */}
+        <div className="pointer-events-none absolute -right-16 -top-16 h-72 w-72 rounded-full bg-amber-500/[0.06]" />
+        <div className="pointer-events-none absolute right-32 top-4 h-40 w-40 rounded-full bg-blue-500/[0.04]" />
 
-      {/* Invoices */}
-      <Card className="border-blue-100 bg-blue-50">
-        <CardHeader>
-          <CardTitle className="text-xs font-semibold uppercase tracking-wider text-blue-700">
-            Invoices (30d)
-          </CardTitle>
-          <CardAction>
-            <Receipt className="h-4 w-4 text-blue-500" />
-          </CardAction>
-        </CardHeader>
-        <CardContent>
-          <p className="text-2xl font-bold tracking-tight text-slate-900">
-            {invoiceCount.toLocaleString()}
-          </p>
-          <p className="mt-1 text-xs text-slate-400">invoices raised</p>
-        </CardContent>
-      </Card>
+        {/* Content */}
+        <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-400">
+          Revenue · Last 30 Days
+          {freshnessLabel && (
+            <span
+              className={cn(
+                "ml-3 font-medium normal-case tracking-normal",
+                (daysDiff ?? 0) > 2 ? "text-amber-500" : "text-slate-500",
+              )}
+            >
+              · {freshnessLabel}
+            </span>
+          )}
+        </p>
 
-      {/* Customers */}
-      <Card className="border-purple-100 bg-purple-50">
-        <CardHeader>
-          <CardTitle className="text-xs font-semibold uppercase tracking-wider text-purple-700">
-            Active Customers
-          </CardTitle>
-          <CardAction>
-            <Users className="h-4 w-4 text-purple-500" />
-          </CardAction>
-        </CardHeader>
-        <CardContent>
-          <p className="text-2xl font-bold tracking-tight text-slate-900">
-            {activeCustomers.toLocaleString()}
-          </p>
-          <p className="mt-1 text-xs text-slate-400">
-            of {totalCustomers.toLocaleString()} total
-          </p>
-        </CardContent>
-      </Card>
+        <p className="mt-2 font-mono text-5xl font-extrabold tracking-tight text-white">
+          {formatKES(revenue30d)}
+        </p>
 
-      {/* Outstanding AR */}
-      <Card className="border-amber-100 bg-amber-50">
-        <CardHeader>
-          <CardTitle className="text-xs font-semibold uppercase tracking-wider text-amber-700">
-            Outstanding AR
-          </CardTitle>
-          <CardAction>
-            <Clock className="h-4 w-4 text-amber-500" />
-          </CardAction>
-        </CardHeader>
-        <CardContent>
-          <p className="text-2xl font-bold tracking-tight text-slate-900">
-            {formatKES(arTotal)}
-          </p>
-          <p className="mt-1 text-xs text-slate-400">
-            across {arCount.toLocaleString()} open invoices
-          </p>
-        </CardContent>
-      </Card>
+        <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-sm">
+          <span className="text-slate-300">
+            {invoiceCount.toLocaleString()} invoices
+          </span>
+          <span className="hidden text-slate-600 sm:inline">·</span>
+          <span className="text-slate-300">
+            {activeCustomers.toLocaleString()} active customers
+          </span>
+          <span className="hidden text-slate-600 sm:inline">·</span>
+          <span className="font-semibold text-amber-400">
+            {formatKES(arTotal)} AR outstanding
+          </span>
+        </div>
+      </div>
+
+      {/* ── KPI cards ─────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <MetricCard
+          label="Revenue (30d)"
+          value={formatKES(revenue30d)}
+          sublabel="ex-VAT, invoiced"
+          icon={TrendingUp}
+        />
+        <MetricCard
+          label="Invoices Raised"
+          value={invoiceCount.toLocaleString()}
+          sublabel="last 30 days"
+          icon={Receipt}
+        />
+        <MetricCard
+          label="Active Customers"
+          value={activeCustomers.toLocaleString()}
+          sublabel={`of ${totalCustomers.toLocaleString()} on ledger`}
+          icon={Users}
+        />
+        <MetricCard
+          label="Outstanding AR"
+          value={formatKES(arTotal)}
+          sublabel={`${arCount.toLocaleString()} open invoices`}
+          icon={Clock}
+        />
+      </div>
     </div>
   );
 }
@@ -254,7 +283,7 @@ async function RevenueTrendSection() {
 
   const { data: rows } = await supabase
     .from("invoices")
-    .select("doc_date, doc_total")
+    .select("doc_date, doc_total, vat_sum")
     .gte("doc_date", d90)
     .eq("cancelled", false)
     .order("doc_date", { ascending: true });
@@ -262,7 +291,7 @@ async function RevenueTrendSection() {
   const byDate = new Map<string, number>();
   for (const r of rows ?? []) {
     const d = r.doc_date as string;
-    byDate.set(d, (byDate.get(d) ?? 0) + Number(r.doc_total ?? 0));
+    byDate.set(d, (byDate.get(d) ?? 0) + Number(r.doc_total ?? 0) - Number(r.vat_sum ?? 0));
   }
   const trendData = Array.from(byDate.entries()).map(([date, revenue]) => ({
     date,
@@ -270,13 +299,14 @@ async function RevenueTrendSection() {
   }));
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="border-slate-200 shadow-sm">
+      <CardHeader className="pb-2">
         <CardTitle className="text-sm font-semibold text-slate-700">
           Revenue trend — last 90 days
         </CardTitle>
+        <p className="text-xs text-slate-400">Ex-VAT, daily invoiced</p>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-0">
         <RevenueAreaChart data={trendData} />
       </CardContent>
     </Card>
@@ -295,7 +325,6 @@ async function RecentInvoicesSection() {
     .order("doc_date", { ascending: false })
     .limit(10);
 
-  // Resolve customer names in a separate query (no FK join needed)
   const codes = [...new Set((rows ?? []).map((r) => r.card_code))];
   const { data: custRows } = codes.length
     ? await supabase
@@ -305,12 +334,13 @@ async function RecentInvoicesSection() {
     : { data: [] };
   const nameMap: Record<string, string> = {};
   for (const c of custRows ?? []) {
-    if (c.card_code) nameMap[c.card_code] = (c.card_name as string | null) ?? c.card_code;
+    if (c.card_code)
+      nameMap[c.card_code] = (c.card_name as string | null) ?? c.card_code;
   }
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="border-slate-200 shadow-sm">
+      <CardHeader className="pb-2">
         <CardTitle className="text-sm font-semibold text-slate-700">
           Recent Invoices
         </CardTitle>
@@ -319,19 +349,19 @@ async function RecentInvoicesSection() {
         <Table>
           <TableHeader>
             <TableRow className="border-slate-200 bg-slate-50 hover:bg-slate-50">
-              <TableHead className="text-xs font-semibold text-slate-600">
+              <TableHead className="text-xs font-semibold text-slate-500">
                 Doc #
               </TableHead>
-              <TableHead className="text-xs font-semibold text-slate-600">
+              <TableHead className="text-xs font-semibold text-slate-500">
                 Date
               </TableHead>
-              <TableHead className="text-xs font-semibold text-slate-600">
+              <TableHead className="text-xs font-semibold text-slate-500">
                 Customer
               </TableHead>
-              <TableHead className="text-right text-xs font-semibold text-slate-600">
+              <TableHead className="text-right text-xs font-semibold text-slate-500">
                 Total
               </TableHead>
-              <TableHead className="text-xs font-semibold text-slate-600">
+              <TableHead className="text-xs font-semibold text-slate-500">
                 Status
               </TableHead>
             </TableRow>
@@ -341,7 +371,7 @@ async function RecentInvoicesSection() {
               <TableRow>
                 <TableCell
                   colSpan={5}
-                  className="py-10 text-center text-slate-400"
+                  className="py-10 text-center text-sm text-slate-400"
                 >
                   No invoices found
                 </TableCell>
@@ -355,10 +385,10 @@ async function RecentInvoicesSection() {
                   <TableCell className="font-mono text-sm text-slate-700">
                     {inv.doc_num ?? "—"}
                   </TableCell>
-                  <TableCell className="text-sm text-slate-600">
+                  <TableCell className="text-sm text-slate-500">
                     {formatDate(inv.doc_date as string)}
                   </TableCell>
-                  <TableCell className="max-w-[180px] truncate text-sm font-medium text-slate-900">
+                  <TableCell className="max-w-[160px] truncate text-sm font-medium text-slate-900">
                     {nameMap[inv.card_code] ?? inv.card_code}
                   </TableCell>
                   <TableCell className="text-right font-mono text-sm text-slate-900">
@@ -368,10 +398,10 @@ async function RecentInvoicesSection() {
                     <Badge
                       variant="secondary"
                       className={cn(
-                        "border-0 text-xs",
+                        "border-0 text-xs font-medium",
                         inv.doc_status === "O"
                           ? "bg-amber-50 text-amber-700"
-                          : "bg-emerald-50 text-emerald-700",
+                          : "bg-slate-100 text-slate-500",
                       )}
                     >
                       {inv.doc_status === "C"
@@ -399,17 +429,20 @@ async function TopCustomersSection() {
 
   const { data: rows } = await supabase
     .from("invoices")
-    .select("card_code, doc_total")
+    .select("card_code, doc_total, vat_sum")
     .gte("doc_date", d30)
     .eq("cancelled", false);
 
-  // Aggregate revenue per customer
   const totals = new Map<string, number>();
   for (const r of rows ?? []) {
-    totals.set(r.card_code, (totals.get(r.card_code) ?? 0) + Number(r.doc_total ?? 0));
+    totals.set(
+      r.card_code,
+      (totals.get(r.card_code) ?? 0) +
+        Number(r.doc_total ?? 0) -
+        Number(r.vat_sum ?? 0),
+    );
   }
 
-  // Get top-10 codes, then resolve names separately
   const topCodes = Array.from(totals.entries())
     .sort((a, b) => b[1] - a[1])
     .slice(0, 10)
@@ -424,7 +457,8 @@ async function TopCustomersSection() {
 
   const nameMap: Record<string, string> = {};
   for (const c of custRows ?? []) {
-    if (c.card_code) nameMap[c.card_code] = (c.card_name as string | null) ?? c.card_code;
+    if (c.card_code)
+      nameMap[c.card_code] = (c.card_name as string | null) ?? c.card_code;
   }
 
   const topCustomers = topCodes.map((code) => ({
@@ -433,20 +467,21 @@ async function TopCustomersSection() {
   }));
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="border-slate-200 shadow-sm">
+      <CardHeader className="pb-2">
         <CardTitle className="text-sm font-semibold text-slate-700">
           Top Customers — last 30 days
         </CardTitle>
+        <p className="text-xs text-slate-400">By revenue, ex-VAT</p>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-0">
         <TopCustomersChart data={topCustomers} />
       </CardContent>
     </Card>
   );
 }
 
-// ── Sales Employee section ────────────────────────────────────────────────────
+// ── Sales employee ────────────────────────────────────────────────────────────
 
 async function SalesEmployeeSection() {
   const supabase = await createServerClient();
@@ -455,7 +490,7 @@ async function SalesEmployeeSection() {
 
   const { data } = await supabase
     .from("invoices")
-    .select("slp_name, doc_total")
+    .select("slp_name, doc_total, vat_sum")
     .gte("doc_date", d30)
     .lte("doc_date", todayStr)
     .eq("cancelled", false);
@@ -465,7 +500,7 @@ async function SalesEmployeeSection() {
 
   if (!hasData) {
     return (
-      <Card>
+      <Card className="border-slate-200 shadow-sm">
         <CardHeader>
           <CardTitle className="text-sm font-semibold text-slate-700">
             Revenue by Sales Employee (30d)
@@ -476,7 +511,7 @@ async function SalesEmployeeSection() {
             Sales employee data will appear after the next SAP sync
             <br />
             <span className="text-xs text-slate-300">
-              (pending: column added, awaiting re-sync)
+              (slp_name column added — awaiting re-sync)
             </span>
           </p>
         </CardContent>
@@ -487,20 +522,26 @@ async function SalesEmployeeSection() {
   const map = new Map<string, number>();
   for (const r of rows) {
     const name = (r.slp_name as string | null) ?? "(unassigned)";
-    map.set(name, (map.get(name) ?? 0) + Number(r.doc_total ?? 0));
+    map.set(
+      name,
+      (map.get(name) ?? 0) +
+        Number(r.doc_total ?? 0) -
+        Number(r.vat_sum ?? 0),
+    );
   }
   const chartData = Array.from(map.entries())
     .sort((a, b) => b[1] - a[1])
     .map(([card_name, total]) => ({ card_name, total }));
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="border-slate-200 shadow-sm">
+      <CardHeader className="pb-2">
         <CardTitle className="text-sm font-semibold text-slate-700">
-          Revenue by Sales Employee (30d)
+          Revenue by Sales Employee — last 30 days
         </CardTitle>
+        <p className="text-xs text-slate-400">Ex-VAT</p>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-0">
         <TopCustomersChart data={chartData} />
       </CardContent>
     </Card>
@@ -512,20 +553,8 @@ async function SalesEmployeeSection() {
 export default function OverviewPage() {
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900">
-          Commercial Overview
-        </h1>
-        <div className="mt-1 flex items-center gap-3">
-          <p className="text-slate-500">Live data from SAP Business One</p>
-          <Suspense fallback={null}>
-            <DataFreshnessNote />
-          </Suspense>
-        </div>
-      </div>
-
-      <Suspense fallback={<KpiGridSkeleton />}>
-        <KpiSection />
+      <Suspense fallback={<HeroAndKpiSkeleton />}>
+        <HeroAndKpiSection />
       </Suspense>
 
       <Suspense fallback={<CardSkeleton height={280} />}>

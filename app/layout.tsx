@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Fraunces } from "next/font/google";
+import { Inter, Geist_Mono, Fraunces } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+  display: "swap",
 });
 
 const geistMono = Geist_Mono({
@@ -19,8 +21,8 @@ const fraunces = Fraunces({
 });
 
 export const metadata: Metadata = {
-  title: "ProChem FMCG Dashboard",
-  description: "Commercial & Treasury analytics dashboard",
+  title: "Prochem Commercial Intelligence",
+  description: "Commercial analytics for Prochem East Africa — powered by SAP Business One",
 };
 
 export default function RootLayout({
@@ -31,7 +33,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${fraunces.variable} h-full antialiased`}
+      className={`${inter.variable} ${geistMono.variable} ${fraunces.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>

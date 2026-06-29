@@ -29,7 +29,7 @@ interface Props {
 // ── Fast-Moving SKUs section ──────────────────────────────────────────────────
 
 async function FastMovingSkusSection() {
-  const skus = await getFastMovingSkus({ days: 30, limit: 15 });
+  const { skus } = await getFastMovingSkus({ days: 30, limit: 15 });
 
   if (skus.length === 0) {
     return (

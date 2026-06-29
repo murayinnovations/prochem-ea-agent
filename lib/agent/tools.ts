@@ -61,7 +61,18 @@ export const toolSchemas = {
   }),
 
   get_fast_moving_skus: z.object({
-    days: z.number().int().min(7).max(365).default(30),
+    days: z.number().int().min(1).max(1825).optional().describe(
+      "Rolling window: look back this many days from today. Omit when using start+end.",
+    ),
+    start: z.string().optional().describe(
+      "Absolute range start, ISO date yyyy-MM-dd. Use with end to query any historical period (e.g. 2019-09-01). Overrides days.",
+    ),
+    end: z.string().optional().describe(
+      "Absolute range end, ISO date yyyy-MM-dd, inclusive.",
+    ),
+    item_codes: z.array(z.string()).max(20).optional().describe(
+      "Filter to these specific SAP item codes. Omit to return top N by volume across all SKUs.",
+    ),
     limit: z.number().int().min(1).max(50).default(20),
   }),
 
@@ -363,21 +374,54 @@ export function createToolHandlers(db: DB) {
     async get_fast_moving_skus(
       args: z.infer<typeof toolSchemas.get_fast_moving_skus>,
     ) {
-      const now = new Date();
       const fmt = (d: Date) => d.toISOString().split("T")[0];
-      const dNow = fmt(now);
-      const dCurrent = fmt(new Date(now.getTime() - args.days * 86_400_000));
-      const dPrior = fmt(new Date(now.getTime() - args.days * 2 * 86_400_000));
+
+      // Resolve date range: absolute start/end takes priority over rolling days.
+      let dNow: string;
+      let dCurrent: string;
+      let periodDays: number;
+
+      if (args.start && args.end) {
+        dCurrent = args.start;
+        dNow = args.end;
+        periodDays = Math.max(
+          1,
+          Math.round((new Date(args.end).getTime() - new Date(args.start).getTime()) / 86_400_000),
+        );
+      } else {
+        const rollingDays = args.days ?? 30;
+        const now = new Date();
+        dNow = fmt(now);
+        dCurrent = fmt(new Date(now.getTime() - rollingDays * 86_400_000));
+        periodDays = rollingDays;
+      }
+
+      // Prior period: same duration, immediately before the current window.
+      const dPrior = fmt(new Date(new Date(dCurrent).getTime() - periodDays * 86_400_000));
+
+      const granularity: 'daily' | 'weekly' | 'monthly' =
+        periodDays <= 90 ? 'daily' : periodDays <= 400 ? 'weekly' : 'monthly';
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      function applyItemFilter(q: any) {
+        return args.item_codes && args.item_codes.length > 0
+          ? q.in("item_code", args.item_codes)
+          : q;
+      }
 
       const [currRes, priorRes] = await Promise.all([
-        db.from("invoice_lines")
-          .select("item_code, quantity, line_total")
-          .gte("doc_date", dCurrent)
-          .lte("doc_date", dNow),
-        db.from("invoice_lines")
-          .select("item_code, quantity")
-          .gte("doc_date", dPrior)
-          .lt("doc_date", dCurrent),
+        applyItemFilter(
+          db.from("invoice_lines")
+            .select("item_code, quantity, line_total")
+            .gte("doc_date", dCurrent)
+            .lte("doc_date", dNow),
+        ),
+        applyItemFilter(
+          db.from("invoice_lines")
+            .select("item_code, quantity")
+            .gte("doc_date", dPrior)
+            .lt("doc_date", dCurrent),
+        ),
       ]);
 
       const currVol = new Map<string, number>();
@@ -408,6 +452,9 @@ export function createToolHandlers(db: DB) {
           itemMap.set(it.item_code as string, it.item_name as string | null);
       }
 
+      // Velocity per granularity unit in addition to per-day.
+      const periodDivisor = granularity === 'monthly' ? 30.44 : granularity === 'weekly' ? 7 : 1;
+
       const skus = topCodes.map((code) => {
         const vol = currVol.get(code) ?? 0;
         const rev = currRev.get(code) ?? 0;
@@ -419,7 +466,8 @@ export function createToolHandlers(db: DB) {
           item_code: code,
           item_name: itemMap.get(code) ?? code,
           total_volume: vol,
-          velocity_per_day: Math.round((vol / args.days) * 100) / 100,
+          velocity_per_day: Math.round((vol / periodDays) * 100) / 100,
+          velocity_per_period: Math.round((vol / periodDays) * periodDivisor * 100) / 100,
           total_revenue_kes: rev,
           prior_period_volume: priorV,
           trend_pct,
@@ -427,12 +475,22 @@ export function createToolHandlers(db: DB) {
       });
 
       const noTrendCount = skus.filter((s) => s.trend_pct === null).length;
+
+      // For windows > 2 years the prior period may predate available data (~2018).
+      const priorPeriodNote = periodDays > 730
+        ? `Prior-period window covers ${dPrior} to ${dCurrent}. If Prochem SAP data begins ~2018, volumes before that date will be zero, so trend_pct may understate historical growth for very long windows.`
+        : undefined;
+
       return {
-        period_days: args.days,
+        period_days: periodDays,
+        granularity,
+        period_start: dCurrent,
+        period_end: dNow,
         skus,
         ...(noTrendCount > 0
           ? { note: `${noTrendCount} SKU(s) have no prior-period sales — trend shown as null (new or seasonal items).` }
           : {}),
+        ...(priorPeriodNote ? { prior_period_note: priorPeriodNote } : {}),
       };
     },
 
@@ -690,7 +748,7 @@ const descriptions: Record<ToolName, string> = {
   get_sales_employee_breakdown:
     "Revenue, invoice count, and outstanding AR per sales employee for a period. Returns '(unassigned)' rows when slp_name is not yet synced.",
   get_fast_moving_skus:
-    "Top N SKUs ranked by sales volume over the last N days, with velocity (units/day), product revenue, and % trend vs the equivalent prior period. Use for questions about fastest-moving products, trending items, or SKU velocity.",
+    "Top N SKUs ranked by sales volume for a period. Supports two modes: (1) rolling window — pass days (1–1825) to look back from today; (2) absolute range — pass start+end ISO dates to query any historical period (e.g. start='2019-09-01' end='2019-09-30'). Optionally filter to specific item codes with item_codes[]. Returns velocity (units/day and units/period), product revenue, % trend vs the equivalent prior period, and granularity ('daily' ≤90d, 'weekly' ≤400d, 'monthly' >400d). Always state the granularity for windows over 90 days. Use for any question about product volume, velocity, or historical SKU performance.",
   get_stock_position:
     "Current on-hand, committed, and available inventory per SKU from the latest SAP OITW snapshot. Optionally filter by warehouse code. Returns empty with a note if no snapshot exists yet.",
   get_accounts_payable:

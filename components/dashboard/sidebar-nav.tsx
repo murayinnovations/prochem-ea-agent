@@ -37,29 +37,53 @@ export function SidebarNav({ lastSync }: Props) {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <nav className="flex-1 overflow-y-auto px-3 py-4">
+      <nav className="flex-1 overflow-y-auto px-3 py-5">
+        <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-600">
+          Navigation
+        </p>
         <ul className="space-y-0.5">
-          {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
-            <li key={href}>
-              <Link
-                href={href}
-                className={cn(
-                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                  isActive(href, pathname)
-                    ? "bg-amber-500/10 text-amber-300"
-                    : "text-slate-400 hover:bg-white/5 hover:text-white"
+          {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+            const active = isActive(href, pathname);
+            return (
+              <li key={href} className="relative">
+                {active && (
+                  <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-r-full bg-amber-400" />
                 )}
-              >
-                <Icon className="h-4 w-4 shrink-0" />
-                <span>{label}</span>
-              </Link>
-            </li>
-          ))}
+                <Link
+                  href={href}
+                  className={cn(
+                    "group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150",
+                    active
+                      ? "bg-white/10 text-white"
+                      : "text-slate-400 hover:bg-white/5 hover:text-slate-200"
+                  )}
+                >
+                  <Icon
+                    className={cn(
+                      "h-4 w-4 shrink-0 transition-colors",
+                      active
+                        ? "text-amber-400"
+                        : "text-slate-500 group-hover:text-slate-300"
+                    )}
+                  />
+                  <span>{label}</span>
+                </Link>
+              </li>
+            );
+          })}
         </ul>
       </nav>
 
-      <div className="space-y-3 border-t border-white/10 px-4 py-4">
-        <p className="text-[11px] text-slate-500">Last sync: {lastSync}</p>
+      <div className="space-y-3 border-t border-white/[0.06] px-4 py-5">
+        <div className="flex items-center gap-2">
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+          </span>
+          <p className="text-[11px] font-medium text-slate-500">
+            Synced {lastSync}
+          </p>
+        </div>
         <ChatSheet />
       </div>
     </div>

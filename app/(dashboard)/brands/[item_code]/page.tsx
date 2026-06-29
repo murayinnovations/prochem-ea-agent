@@ -17,10 +17,11 @@ export default async function SkuDetailPage({ params }: Props) {
   const { item_code } = await params;
   const code = decodeURIComponent(item_code);
 
-  const [sku, weeklyTrend] = await Promise.all([
+  const [sku, trendResult] = await Promise.all([
     getSkuDetail(code),
-    getSkuVolumeTrend(code, 12),
+    getSkuVolumeTrend(code, 84),  // 84 days = 12 weeks, weekly granularity
   ]);
+  const { granularity: trendGranularity, series: weeklyTrend } = trendResult;
 
   if (!sku) notFound();
 
@@ -109,7 +110,7 @@ export default async function SkuDetailPage({ params }: Props) {
           <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="mb-4 text-sm font-semibold text-slate-900">Weekly sales volume (12 weeks)</h2>
             {weeklyTrend.length > 0 ? (
-              <WeeklyVolumeChart data={weeklyTrend} />
+              <WeeklyVolumeChart data={weeklyTrend} granularity={trendGranularity} />
             ) : (
               <p className="py-8 text-center text-sm text-slate-400">No sales in the last 12 weeks.</p>
             )}

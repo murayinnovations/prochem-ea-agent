@@ -98,9 +98,9 @@ export function TopCustomersChart({ data }: { data: CustomerRevenue[] }) {
         />
         <Bar
           dataKey="total"
-          fill="#10b981"
+          fill="#f59e0b"
           radius={[0, 4, 4, 0]}
-          maxBarSize={20}
+          maxBarSize={18}
         />
       </BarChart>
     </ResponsiveContainer>

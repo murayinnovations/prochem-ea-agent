@@ -62,6 +62,25 @@ function today() {
   return new Date();
 }
 
+export type Granularity = 'daily' | 'weekly' | 'monthly';
+
+function granularityFor(days: number): Granularity {
+  if (days <= 90) return 'daily';
+  if (days <= 400) return 'weekly';
+  return 'monthly';
+}
+
+function toPeriodStart(dateStr: string, g: Granularity): string {
+  if (g === 'daily') return dateStr;
+  if (g === 'monthly') return dateStr.slice(0, 7) + '-01';
+  // weekly: Monday of the containing week
+  const d = new Date(dateStr + 'T00:00:00Z');
+  const day = d.getUTCDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setUTCDate(d.getUTCDate() + diff);
+  return d.toISOString().split('T')[0];
+}
+
 // ── listSkus ──────────────────────────────────────────────────────────────────
 
 export const listSkus = unstable_cache(
@@ -296,8 +315,13 @@ export interface FastMovingSku {
   trend_pct: number | null;
 }
 
+export interface FastMovingSkusResult {
+  granularity: Granularity;
+  skus: FastMovingSku[];
+}
+
 export const getFastMovingSkus = unstable_cache(
-  async ({ days = 30, limit = 20 }: { days?: number; limit?: number } = {}): Promise<FastMovingSku[]> => {
+  async ({ days = 30, limit = 20 }: { days?: number; limit?: number } = {}): Promise<FastMovingSkusResult> => {
     const supabase = createAdminClient();
     const now = today();
     const dNow = format(now, "yyyy-MM-dd");
@@ -331,7 +355,9 @@ export const getFastMovingSkus = unstable_cache(
       priorVol.set(code, (priorVol.get(code) ?? 0) + Number(r.quantity ?? 0));
     }
 
-    if (currVol.size === 0) return [];
+    const granularity = granularityFor(days);
+
+    if (currVol.size === 0) return { granularity, skus: [] };
 
     const topCodes = Array.from(currVol.entries())
       .sort((a, b) => b[1] - a[1])
@@ -353,7 +379,7 @@ export const getFastMovingSkus = unstable_cache(
       }
     }
 
-    return topCodes.map((code) => {
+    const skus = topCodes.map((code) => {
       const vol = currVol.get(code) ?? 0;
       const rev = currRev.get(code) ?? 0;
       const priorV = priorVol.get(code) ?? 0;
@@ -373,6 +399,8 @@ export const getFastMovingSkus = unstable_cache(
         trend_pct,
       };
     });
+
+    return { granularity, skus };
   },
   ["brands-fast-moving-skus"],
   { revalidate: 300 },
@@ -381,15 +409,21 @@ export const getFastMovingSkus = unstable_cache(
 // ── getSkuVolumeTrend ─────────────────────────────────────────────────────────
 
 export interface WeeklyVolumeTrend {
-  week_start: string;
+  week_start: string;   // ISO date of the period bucket (day/week-Mon/month-01)
   volume: number;
   revenue_kes: number;
 }
 
+export interface SkuVolumeTrendResult {
+  granularity: Granularity;
+  series: WeeklyVolumeTrend[];
+}
+
 export const getSkuVolumeTrend = unstable_cache(
-  async (item_code: string, weeks = 12): Promise<WeeklyVolumeTrend[]> => {
+  async (item_code: string, days = 84): Promise<SkuVolumeTrendResult> => {
     const supabase = createAdminClient();
-    const start = format(subDays(today(), weeks * 7), "yyyy-MM-dd");
+    const granularity = granularityFor(days);
+    const start = format(subDays(today(), days), "yyyy-MM-dd");
 
     const { data } = await supabase
       .from("invoice_lines")
@@ -397,31 +431,25 @@ export const getSkuVolumeTrend = unstable_cache(
       .eq("item_code", item_code)
       .gte("doc_date", start);
 
-    function toWeekStart(dateStr: string): string {
-      const d = new Date(dateStr + "T00:00:00Z");
-      const day = d.getUTCDay();
-      const diff = day === 0 ? -6 : 1 - day;
-      d.setUTCDate(d.getUTCDate() + diff);
-      return d.toISOString().split("T")[0];
-    }
-
-    const byWeek = new Map<string, { vol: number; rev: number }>();
+    const byPeriod = new Map<string, { vol: number; rev: number }>();
     for (const r of data ?? []) {
-      const ws = toWeekStart(r.doc_date as string);
-      const prev = byWeek.get(ws) ?? { vol: 0, rev: 0 };
-      byWeek.set(ws, {
+      const bucket = toPeriodStart(r.doc_date as string, granularity);
+      const prev = byPeriod.get(bucket) ?? { vol: 0, rev: 0 };
+      byPeriod.set(bucket, {
         vol: prev.vol + Number(r.quantity ?? 0),
         rev: prev.rev + Number(r.line_total ?? 0),
       });
     }
 
-    return Array.from(byWeek.entries())
+    const series = Array.from(byPeriod.entries())
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([week_start, { vol, rev }]) => ({
         week_start,
         volume: vol,
         revenue_kes: rev,
       }));
+
+    return { granularity, series };
   },
   ["brands-sku-volume-trend"],
   { revalidate: 300 },
