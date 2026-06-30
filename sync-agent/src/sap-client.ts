@@ -167,11 +167,12 @@ export function fetchInvoices(updatedSince?: Date) {
       i.DocEntry, i.DocNum, i.CardCode, i.DocDate, i.DocDueDate,
       i.DocTotal, i.DocTotalSy, i.DocCur, i.DocRate, i.PaidToDate,
       i.DocStatus, i.CANCELED,
-      i.SlpCode, s.SlpName,
+      COALESCE(i.SlpCode, c.SlpCode) AS SlpCode, s.SlpName,
       i.VatSum,
       i.CreateDate, i.UpdateDate
     FROM OINV i
-    LEFT JOIN OSLP s ON i.SlpCode = s.SlpCode
+    LEFT JOIN OCRD c ON i.CardCode = c.CardCode
+    LEFT JOIN OSLP s ON COALESCE(i.SlpCode, c.SlpCode) = s.SlpCode
     ${filter}
     ORDER BY i.UpdateDate ASC
   `;
