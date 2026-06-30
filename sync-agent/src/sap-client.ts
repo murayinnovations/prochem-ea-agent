@@ -189,6 +189,24 @@ export interface SapInvoiceLine {
   TotalSumSy: number;
 }
 
+export function fetchInvoicesByDocDate(from: Date, to: Date) {
+  const query = `
+    SELECT
+      i.DocEntry, i.DocNum, i.CardCode, i.DocDate, i.DocDueDate,
+      i.DocTotal, i.DocTotalSy, i.DocCur, i.DocRate, i.PaidToDate,
+      i.DocStatus, i.CANCELED,
+      COALESCE(i.SlpCode, c.SlpCode) AS SlpCode, s.SlpName,
+      i.VatSum,
+      i.CreateDate, i.UpdateDate
+    FROM OINV i
+    LEFT JOIN OCRD c ON i.CardCode = c.CardCode
+    LEFT JOIN OSLP s ON COALESCE(i.SlpCode, c.SlpCode) = s.SlpCode
+    WHERE i.DocDate >= @fromDate AND i.DocDate <= @toDate
+    ORDER BY i.DocDate ASC
+  `;
+  return querySap<SapInvoice>(query, { fromDate: from, toDate: to });
+}
+
 export function fetchInvoiceLinesForDocs(docEntries: number[]) {
   if (docEntries.length === 0) return Promise.resolve([]);
   const list = docEntries.join(",");
