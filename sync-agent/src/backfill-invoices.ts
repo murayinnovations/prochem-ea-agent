@@ -62,15 +62,16 @@ async function main() {
     process.exit(1);
   }
 
-  const runId = `backfill-${randomUUID()}`;
-  console.log(`\n=== Invoice backfill ${runId}`);
+  const runId = randomUUID();
+  console.log(`\n=== Invoice backfill backfill-${runId}`);
   console.log(`    DocDate range: ${fromStr} → ${toStr}\n`);
 
   const logId = await startLog({
     entity: "invoices_backfill",
     run_id: runId,
     status: "running",
-    watermark_before: `${fromStr}/${toStr}`,
+    watermark_before: from.toISOString(),
+    watermark_after: to.toISOString(),
   });
 
   try {
