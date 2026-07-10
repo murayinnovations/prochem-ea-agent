@@ -45,3 +45,9 @@ sync-agent/.env
 sync-agent/sync.log
 sync-agent/node_modules/
 sync-agent.zip
+
+# sample data — contains real client financials, never commit
+/samples/
+
+# supabase CLI local cache
+/supabase/.temp/

@@ -9,18 +9,20 @@ import {
   Package,
   Boxes,
   Wallet,
+  FileSpreadsheet,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ChatSheet } from "@/components/chat/chat-sheet";
 
 const NAV_ITEMS: { href: string; label: string; icon: LucideIcon }[] = [
-  { href: "/",          label: "Overview",  icon: LayoutDashboard },
-  { href: "/brands",    label: "Brands",    icon: Package },
-  { href: "/customers", label: "Customers", icon: Users },
-  { href: "/invoices",  label: "Invoices",  icon: FileText },
-  { href: "/stock",     label: "Stock",     icon: Boxes },
-  { href: "/payables",  label: "Payables",  icon: Wallet },
+  { href: "/",                     label: "Overview",             icon: LayoutDashboard },
+  { href: "/brands",                label: "Brands",               icon: Package },
+  { href: "/customers",             label: "Customers",            icon: Users },
+  { href: "/invoices",              label: "Invoices",             icon: FileText },
+  { href: "/stock",                 label: "Stock",                icon: Boxes },
+  { href: "/payables",              label: "Payables",             icon: Wallet },
+  { href: "/management-accounts",   label: "Management Accounts",  icon: FileSpreadsheet },
 ];
 
 function isActive(href: string, pathname: string): boolean {

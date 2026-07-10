@@ -25,3 +25,29 @@ export function formatDate(dateStr: string): string {
     return dateStr;
   }
 }
+
+export function formatDateTime(dateStr: string): string {
+  if (!dateStr) return "—";
+  try {
+    return dateFnsFormat(new Date(dateStr), "dd MMM yyyy, HH:mm");
+  } catch {
+    return dateStr;
+  }
+}
+
+// Plain thousand-separated number, no currency prefix — matches the source
+// management-accounts workbook's own number formatting.
+export function formatNumber(n: number, decimals = 0): string {
+  return new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(n);
+}
+
+// Accounting-style: negatives in parentheses (paired with text-red-600 at the
+// call site). Returns "—" for null/undefined (no entry that period).
+export function formatAccountingNumber(n: number | null | undefined, decimals = 0): string {
+  if (n === null || n === undefined) return "—";
+  const formatted = formatNumber(Math.abs(n), decimals);
+  return n < 0 ? `(${formatted})` : formatted;
+}
