@@ -11,7 +11,18 @@ export interface StockSummary {
   total_on_order: number;
   total_available: number;
   warehouse_count: number;
+  ajs_on_hand: number;
+  ajs_available: number;
+  saku_on_hand: number;
+  saku_available: number;
+  other_on_hand: number;
+  other_available: number;
 }
+
+// Primary stocking warehouses the client wants distinguished in the UI.
+// Everything else (01 General, GIT, RESERVE, ...) rolls up into "other".
+const AJS_WHS_CODE = "AJS";
+const SAKU_WHS_CODE = "SAKU";
 
 export interface StockTrendPoint {
   snapshot_at: string;
@@ -61,14 +72,33 @@ export const getCurrentStock = unstable_cache(
         total_on_order: 0,
         total_available: 0,
         warehouse_count: 0,
+        ajs_on_hand: 0,
+        ajs_available: 0,
+        saku_on_hand: 0,
+        saku_available: 0,
+        other_on_hand: 0,
+        other_available: 0,
       };
+
+      const whsCode = r.whs_code as string | null;
+      const onHand = Number(r.on_hand ?? 0);
+      const available = Number(r.available ?? 0);
+
       map.set(code, {
         ...prev,
-        total_on_hand: prev.total_on_hand + Number(r.on_hand ?? 0),
+        total_on_hand: prev.total_on_hand + onHand,
         total_committed: prev.total_committed + Number(r.committed ?? 0),
         total_on_order: prev.total_on_order + Number(r.on_order ?? 0),
-        total_available: prev.total_available + Number(r.available ?? 0),
+        total_available: prev.total_available + available,
         warehouse_count: prev.warehouse_count + 1,
+        ajs_on_hand: prev.ajs_on_hand + (whsCode === AJS_WHS_CODE ? onHand : 0),
+        ajs_available: prev.ajs_available + (whsCode === AJS_WHS_CODE ? available : 0),
+        saku_on_hand: prev.saku_on_hand + (whsCode === SAKU_WHS_CODE ? onHand : 0),
+        saku_available: prev.saku_available + (whsCode === SAKU_WHS_CODE ? available : 0),
+        other_on_hand:
+          prev.other_on_hand + (whsCode !== AJS_WHS_CODE && whsCode !== SAKU_WHS_CODE ? onHand : 0),
+        other_available:
+          prev.other_available + (whsCode !== AJS_WHS_CODE && whsCode !== SAKU_WHS_CODE ? available : 0),
       });
     }
 

@@ -81,14 +81,23 @@ export default async function StockPage() {
               <Table>
                 <TableHeader>
                   <TableRow className="border-slate-200 bg-slate-50 hover:bg-slate-50">
-                    <TableHead className="text-xs font-semibold text-slate-600">Item</TableHead>
-                    <TableHead className="text-xs font-semibold text-slate-600">Group</TableHead>
-                    <TableHead className="text-right text-xs font-semibold text-slate-600">On Hand</TableHead>
-                    <TableHead className="text-right text-xs font-semibold text-slate-600">Committed</TableHead>
-                    <TableHead className="text-right text-xs font-semibold text-slate-600">On Order</TableHead>
-                    <TableHead className="text-right text-xs font-semibold text-slate-600">Available</TableHead>
-                    <TableHead className="text-xs font-semibold text-slate-600">UOM</TableHead>
-                    <TableHead className="text-center text-xs font-semibold text-slate-600">Whse</TableHead>
+                    <TableHead rowSpan={2} className="align-bottom text-xs font-semibold text-slate-600">Item</TableHead>
+                    <TableHead rowSpan={2} className="align-bottom text-xs font-semibold text-slate-600">Group</TableHead>
+                    <TableHead colSpan={2} className="border-l border-slate-200 text-center text-xs font-semibold text-slate-600">AJS</TableHead>
+                    <TableHead colSpan={2} className="border-l border-slate-200 text-center text-xs font-semibold text-slate-600">SAKU</TableHead>
+                    <TableHead colSpan={2} className="border-l border-slate-200 text-center text-xs font-semibold text-slate-600">Other</TableHead>
+                    <TableHead colSpan={2} className="border-l border-slate-200 text-center text-xs font-semibold text-slate-600">Total</TableHead>
+                    <TableHead rowSpan={2} className="align-bottom text-xs font-semibold text-slate-600">UOM</TableHead>
+                  </TableRow>
+                  <TableRow className="border-slate-200 bg-slate-50 hover:bg-slate-50">
+                    <TableHead className="border-l border-slate-200 text-right text-xs font-semibold text-slate-600">On Hand</TableHead>
+                    <TableHead className="text-right text-xs font-semibold text-slate-600">Avail.</TableHead>
+                    <TableHead className="border-l border-slate-200 text-right text-xs font-semibold text-slate-600">On Hand</TableHead>
+                    <TableHead className="text-right text-xs font-semibold text-slate-600">Avail.</TableHead>
+                    <TableHead className="border-l border-slate-200 text-right text-xs font-semibold text-slate-600">On Hand</TableHead>
+                    <TableHead className="text-right text-xs font-semibold text-slate-600">Avail.</TableHead>
+                    <TableHead className="border-l border-slate-200 text-right text-xs font-semibold text-slate-600">On Hand</TableHead>
+                    <TableHead className="text-right text-xs font-semibold text-slate-600">Avail.</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -108,14 +117,36 @@ export default async function StockPage() {
                       <TableCell className="text-xs text-slate-500">
                         {item.items_group_name ?? "—"}
                       </TableCell>
-                      <TableCell className="text-right font-mono text-sm text-slate-900">
+                      <TableCell className="border-l border-slate-100 text-right font-mono text-sm text-slate-900">
+                        {item.ajs_on_hand.toLocaleString()}
+                      </TableCell>
+                      <TableCell
+                        className={
+                          "text-right font-mono text-sm font-semibold " +
+                          (item.ajs_available <= 0 ? "text-red-600" : "text-emerald-700")
+                        }
+                      >
+                        {item.ajs_available.toLocaleString()}
+                      </TableCell>
+                      <TableCell className="border-l border-slate-100 text-right font-mono text-sm text-slate-900">
+                        {item.saku_on_hand.toLocaleString()}
+                      </TableCell>
+                      <TableCell
+                        className={
+                          "text-right font-mono text-sm font-semibold " +
+                          (item.saku_available <= 0 ? "text-red-600" : "text-emerald-700")
+                        }
+                      >
+                        {item.saku_available.toLocaleString()}
+                      </TableCell>
+                      <TableCell className="border-l border-slate-100 text-right font-mono text-sm text-slate-500">
+                        {item.other_on_hand.toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-sm text-slate-500">
+                        {item.other_available.toLocaleString()}
+                      </TableCell>
+                      <TableCell className="border-l border-slate-100 text-right font-mono text-sm text-slate-900">
                         {item.total_on_hand.toLocaleString()}
-                      </TableCell>
-                      <TableCell className="text-right font-mono text-sm text-slate-500">
-                        {item.total_committed.toLocaleString()}
-                      </TableCell>
-                      <TableCell className="text-right font-mono text-sm text-slate-500">
-                        {item.total_on_order.toLocaleString()}
                       </TableCell>
                       <TableCell
                         className={
@@ -129,9 +160,6 @@ export default async function StockPage() {
                       </TableCell>
                       <TableCell className="text-xs text-slate-500">
                         {item.inventory_uom ?? "—"}
-                      </TableCell>
-                      <TableCell className="text-center text-xs text-slate-400">
-                        {item.warehouse_count}
                       </TableCell>
                     </TableRow>
                   ))}
