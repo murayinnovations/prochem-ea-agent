@@ -82,7 +82,7 @@ export function ManagementAccountsUploadButton() {
         <div
           role="status"
           className={cn(
-            "fixed bottom-6 right-6 z-50 flex max-w-sm items-start gap-3 rounded-xl border p-4 shadow-lg",
+            "fixed bottom-4 left-4 right-4 z-50 flex sm:bottom-6 sm:left-auto sm:right-6 sm:max-w-sm items-start gap-3 rounded-xl border p-4 shadow-lg",
             state.status === "success"
               ? "border-emerald-200 bg-emerald-50"
               : "border-red-200 bg-red-50",

@@ -1,5 +1,6 @@
 import { format } from "date-fns";
 import { SidebarNav } from "@/components/dashboard/sidebar-nav";
+import { MobileHeader } from "@/components/dashboard/mobile-header";
 import { createAdminClient } from "@/lib/supabase/server";
 
 export default async function DashboardLayout({
@@ -22,8 +23,8 @@ export default async function DashboardLayout({
 
   return (
     <div className="flex min-h-screen">
-      {/* ── Sidebar ─────────────────────────────────────────────── */}
-      <aside className="fixed inset-y-0 left-0 z-30 flex w-[260px] flex-col bg-[#0A1B3D]">
+      {/* ── Desktop Sidebar (hidden on mobile/tablet) ────────────── */}
+      <aside className="hidden lg:flex fixed inset-y-0 left-0 z-30 w-[260px] flex-col bg-[#0A1B3D]">
         {/* Brand mark */}
         <div className="px-5 pt-7 pb-5">
           <div className="flex items-center gap-3">
@@ -52,9 +53,12 @@ export default async function DashboardLayout({
       </aside>
 
       {/* ── Main content ────────────────────────────────────────── */}
-      <main className="ml-[260px] flex min-h-screen flex-1 flex-col bg-slate-50">
-        <div className="mx-auto w-full max-w-7xl flex-1 p-8">{children}</div>
-        <footer className="border-t border-slate-100 bg-white px-8 py-3">
+      <main className="flex min-h-screen flex-1 flex-col bg-slate-50 min-w-0 w-full lg:ml-[260px]">
+        {/* Mobile top navigation header */}
+        <MobileHeader lastSync={lastSync} />
+
+        <div className="mx-auto w-full max-w-7xl flex-1 p-4 sm:p-6 lg:p-8 min-w-0">{children}</div>
+        <footer className="border-t border-slate-100 bg-white px-4 py-3 sm:px-8">
           <p className="text-[11px] text-slate-400">
             Prochem East Africa · Commercial Intelligence Platform ·{" "}
             <span className="text-slate-300">Powered by SAP Business One</span>

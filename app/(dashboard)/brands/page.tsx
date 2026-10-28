@@ -164,7 +164,7 @@ export default async function BrandsPage({ searchParams }: Props) {
         </p>
       </div>
 
-      <div className="mb-6 grid grid-cols-3 gap-4">
+      <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
         <KpiStat label="SKUs shown" value={total.toLocaleString()} icon={Package} />
         <KpiStat label="Revenue (30d)" value={formatKES(totalRev30)} />
         <KpiStat label="Volume (30d)" value={totalVol30.toLocaleString()} />

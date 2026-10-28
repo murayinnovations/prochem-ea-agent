@@ -31,12 +31,12 @@ export function Pagination({ page, pageSize, total, className }: PaginationProps
   }
 
   return (
-    <div className={cn("flex items-center justify-between gap-4 py-3 text-sm text-slate-600", className)}>
-      <p className="shrink-0">
+    <div className={cn("flex flex-col sm:flex-row items-center justify-between gap-3 py-3 text-sm text-slate-600", className)}>
+      <p className="shrink-0 text-xs sm:text-sm text-center sm:text-left">
         {total === 0 ? "No results" : `${from}–${to} of ${total.toLocaleString()}`}
       </p>
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-center gap-2">
         <label className="flex items-center gap-1.5 text-xs text-slate-500">
           Rows
           <select

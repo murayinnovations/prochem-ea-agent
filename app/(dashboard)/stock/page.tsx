@@ -53,7 +53,7 @@ export default async function StockPage() {
       {items.length > 0 && (
         <>
           {/* KPI strip */}
-          <div className="mb-6 grid grid-cols-3 gap-4">
+          <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
             <KpiStat label="SKUs tracked" value={totalSkus.toLocaleString()} icon={Boxes} />
             <KpiStat label="Zero / negative available" value={lowStockCount.toLocaleString()} />
             <KpiStat label="Snapshot" value={snapshotLabel ?? "—"} />

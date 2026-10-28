@@ -32,9 +32,10 @@ function isActive(href: string, pathname: string): boolean {
 
 interface Props {
   lastSync: string;
+  onNavigate?: () => void;
 }
 
-export function SidebarNav({ lastSync }: Props) {
+export function SidebarNav({ lastSync, onNavigate }: Props) {
   const pathname = usePathname();
 
   return (
@@ -53,6 +54,7 @@ export function SidebarNav({ lastSync }: Props) {
                 )}
                 <Link
                   href={href}
+                  onClick={onNavigate}
                   className={cn(
                     "group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150",
                     active

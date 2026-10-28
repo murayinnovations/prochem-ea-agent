@@ -58,7 +58,7 @@ export function TrendsChart({ options }: { options: Option[] }) {
               next[i] = e.target.value || null;
               setSelected(next);
             }}
-            className="h-9 min-w-[220px] rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400"
+            className="h-9 w-full sm:w-auto sm:min-w-[220px] rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400"
           >
             <option value="">{i === 0 ? "Pick a line to chart…" : `Compare with… (line ${i + 1})`}</option>
             {(["P&L Account", "Customer (AR)", "Stock Item"] as const).map((group) => (

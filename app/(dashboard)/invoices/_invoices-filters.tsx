@@ -30,37 +30,37 @@ export function InvoicesFilters({ current }: Props) {
 
   return (
     <>
-      <div className="relative">
+      <div className="relative w-full sm:w-auto">
         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
         <input
           type="search"
           placeholder="Search customer…"
           defaultValue={current.customerSearch}
           onChange={(e) => update({ customerSearch: e.target.value })}
-          className="h-9 rounded-md border border-slate-200 bg-white pl-8 pr-3 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400"
+          className="h-9 w-full sm:w-auto rounded-md border border-slate-200 bg-white pl-8 pr-3 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400"
         />
       </div>
 
-      <div className="flex items-center gap-1.5">
+      <div className="flex w-full items-center gap-1.5 sm:w-auto">
         <input
           type="date"
           value={current.dateFrom}
           onChange={(e) => update({ dateFrom: e.target.value })}
-          className="h-9 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400"
+          className="h-9 min-w-0 flex-1 sm:flex-none rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400"
         />
         <span className="text-slate-400">–</span>
         <input
           type="date"
           value={current.dateTo}
           onChange={(e) => update({ dateTo: e.target.value })}
-          className="h-9 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400"
+          className="h-9 min-w-0 flex-1 sm:flex-none rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400"
         />
       </div>
 
       <select
         value={current.status}
         onChange={(e) => update({ status: e.target.value as InvoicesFilter["status"] })}
-        className="h-9 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400"
+        className="h-9 min-w-0 flex-1 sm:flex-none rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400"
       >
         <option value="all">All statuses</option>
         <option value="O">Open</option>
@@ -73,7 +73,7 @@ export function InvoicesFilters({ current }: Props) {
           const [sort, sortDir] = e.target.value.split(":");
           update({ sort: sort as InvoicesFilter["sort"], sortDir: sortDir as "asc" | "desc" });
         }}
-        className="h-9 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400"
+        className="h-9 min-w-0 flex-1 sm:flex-none rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400"
       >
         <option value="date:desc">Date ↓</option>
         <option value="date:asc">Date ↑</option>

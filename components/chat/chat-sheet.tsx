@@ -95,7 +95,7 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
 
 // ── Chat panel ────────────────────────────────────────────────────────────────
 
-export function ChatSheet() {
+export function ChatSheet({ compact = false }: { compact?: boolean } = {}) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -223,7 +223,10 @@ export function ChatSheet() {
         variant="secondary"
         size="sm"
         onClick={() => setOpen(true)}
-        className="w-full justify-start gap-2 border-0 bg-slate-800 text-slate-200 hover:bg-slate-700 hover:text-white"
+        className={cn(
+          "gap-2 border-0 bg-slate-800 text-slate-200 hover:bg-slate-700 hover:text-white",
+          compact ? "h-9 px-3" : "w-full justify-start",
+        )}
       >
         <Sparkles className="h-4 w-4 shrink-0" />
         Ask AI

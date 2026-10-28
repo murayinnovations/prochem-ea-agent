@@ -38,10 +38,10 @@ function cutoffs() {
 
 function HeroSkeleton() {
   return (
-    <div className="overflow-hidden rounded-2xl bg-[#0A1B3D] px-8 py-9">
+    <div className="overflow-hidden rounded-2xl bg-[#0A1B3D] px-5 py-6 sm:px-8 sm:py-9">
       <Skeleton className="h-2.5 w-36 bg-white/10" />
       <Skeleton className="mt-4 h-12 w-56 bg-white/10" />
-      <Skeleton className="mt-4 h-2.5 w-80 bg-white/10" />
+      <Skeleton className="mt-4 h-2.5 w-full max-w-80 bg-white/10" />
     </div>
   );
 }
@@ -198,7 +198,7 @@ async function HeroAndKpiSection() {
     <div className="space-y-4">
       {/* ── Hero gradient strip ───────────────────────────────────────── */}
       <div
-        className="relative overflow-hidden rounded-2xl px-8 py-9"
+        className="relative overflow-hidden rounded-2xl px-5 py-6 sm:px-8 sm:py-9"
         style={{
           background:
             "linear-gradient(135deg, #0A1B3D 0%, #0F2554 55%, #162E66 100%)",
@@ -225,7 +225,7 @@ async function HeroAndKpiSection() {
           )}
         </p>
 
-        <p className="mt-2 font-mono text-5xl font-extrabold tracking-tight text-white">
+        <p className="mt-2 break-words font-mono text-3xl font-extrabold tracking-tight text-white sm:text-5xl">
           {formatKES(revenue30d)}
         </p>
 

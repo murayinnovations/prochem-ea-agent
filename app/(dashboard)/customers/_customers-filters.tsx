@@ -31,14 +31,14 @@ export function CustomersFilters({ current, countries }: Props) {
 
   return (
     <>
-      <div className="relative">
+      <div className="relative w-full sm:w-auto">
         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
         <input
           type="search"
           placeholder="Search customers…"
           defaultValue={current.search}
           onChange={(e) => update({ search: e.target.value })}
-          className="h-9 rounded-md border border-slate-200 bg-white pl-8 pr-3 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400"
+          className="h-9 w-full sm:w-auto rounded-md border border-slate-200 bg-white pl-8 pr-3 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400"
         />
       </div>
 
@@ -46,7 +46,7 @@ export function CustomersFilters({ current, countries }: Props) {
         <select
           value={current.country}
           onChange={(e) => update({ country: e.target.value })}
-          className="h-9 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400"
+          className="h-9 min-w-0 flex-1 sm:flex-none rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400"
         >
           <option value="">All Countries</option>
           {countries.map((c) => (
@@ -61,7 +61,7 @@ export function CustomersFilters({ current, countries }: Props) {
           const [sort, sortDir] = e.target.value.split(":");
           update({ sort: sort as CustomersFilter["sort"], sortDir: sortDir as "asc" | "desc" });
         }}
-        className="h-9 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400"
+        className="h-9 min-w-0 flex-1 sm:flex-none rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400"
       >
         <option value="name:asc">Name A–Z</option>
         <option value="name:desc">Name Z–A</option>
