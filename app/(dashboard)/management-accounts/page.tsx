@@ -34,7 +34,15 @@ function statusBadge(status: string) {
 }
 
 export default async function ManagementAccountsPage() {
-  const uploads = await listManagementAccountsUploads();
+  // Caught here rather than thrown: production redacts thrown messages, and
+  // the Supabase error is what's needed to diagnose a failed load.
+  let uploads: Awaited<ReturnType<typeof listManagementAccountsUploads>> = [];
+  let loadError: string | null = null;
+  try {
+    uploads = await listManagementAccountsUploads();
+  } catch (e) {
+    loadError = e instanceof Error ? e.message : String(e);
+  }
   const hasUploads = uploads.length > 0;
   const hasTrend = uploads.length >= 2;
 
@@ -58,6 +66,13 @@ export default async function ManagementAccountsPage() {
           </>
         }
       />
+
+      {loadError && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <p className="font-semibold">Couldn&apos;t load management accounts</p>
+          <p className="mt-1 font-mono text-xs">{loadError}</p>
+        </div>
+      )}
 
       <Card>
         <CardHeader>

@@ -1,4 +1,5 @@
 import { unstable_cache } from "next/cache";
+import { DASHBOARD_DATA_TAG, DASHBOARD_REVALIDATE_SECONDS } from "@/lib/cache";
 import { createAdminClient } from "@/lib/supabase/server";
 import { fetchAllRows } from "@/lib/supabase/paginate";
 
@@ -98,7 +99,7 @@ export const arAgingBuckets = unstable_cache(
     return result;
   },
   ["aggregates-ar-aging"],
-  { revalidate: 60 },
+  { revalidate: DASHBOARD_REVALIDATE_SECONDS, tags: [DASHBOARD_DATA_TAG] },
 );
 
 // ── getSalesEmployeeRollup ────────────────────────────────────────────────────
@@ -150,7 +151,7 @@ export const getSalesEmployeeRollup = unstable_cache(
       .sort((a, b) => b.revenue_kes - a.revenue_kes);
   },
   ["aggregates-sales-employee-rollup"],
-  { revalidate: 300 },
+  { revalidate: DASHBOARD_REVALIDATE_SECONDS, tags: [DASHBOARD_DATA_TAG] },
 );
 
 // ── revenueByPeriod ───────────────────────────────────────────────────────────
@@ -178,5 +179,5 @@ export const revenueByPeriod = unstable_cache(
     };
   },
   ["aggregates-revenue-by-period"],
-  { revalidate: 300 },
+  { revalidate: DASHBOARD_REVALIDATE_SECONDS, tags: [DASHBOARD_DATA_TAG] },
 );

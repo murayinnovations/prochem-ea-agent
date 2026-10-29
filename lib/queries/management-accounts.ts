@@ -1,4 +1,5 @@
 import { unstable_cache } from "next/cache";
+import { DASHBOARD_DATA_TAG, DASHBOARD_REVALIDATE_SECONDS } from "@/lib/cache";
 import { createAdminClient } from "@/lib/supabase/server";
 import { fetchAllRows } from "@/lib/supabase/paginate";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -90,7 +91,7 @@ export const listManagementAccountsUploads = unstable_cache(
     });
   },
   ["management-accounts-uploads-list"],
-  { revalidate: 3600, tags: [MANAGEMENT_ACCOUNTS_LIST_TAG] },
+  { revalidate: DASHBOARD_REVALIDATE_SECONDS, tags: [MANAGEMENT_ACCOUNTS_LIST_TAG, DASHBOARD_DATA_TAG] },
 );
 
 // ── Per-upload detail (per-month viewer) ────────────────────────────────────
@@ -329,7 +330,7 @@ export const getManagementAccountsUploadDetail = unstable_cache(
     };
   },
   ["management-accounts-upload-detail"],
-  { revalidate: 3600, tags: [MANAGEMENT_ACCOUNTS_DETAIL_TAG] },
+  { revalidate: DASHBOARD_REVALIDATE_SECONDS, tags: [MANAGEMENT_ACCOUNTS_DETAIL_TAG, DASHBOARD_DATA_TAG] },
 );
 
 // ── Trends across all uploads ────────────────────────────────────────────────
@@ -414,5 +415,5 @@ export const getManagementAccountsTrends = unstable_cache(
     return { monthsAvailable: uploadRows.length, pnl, customers, stock };
   },
   ["management-accounts-trends"],
-  { revalidate: 3600, tags: [MANAGEMENT_ACCOUNTS_TRENDS_TAG] },
+  { revalidate: DASHBOARD_REVALIDATE_SECONDS, tags: [MANAGEMENT_ACCOUNTS_TRENDS_TAG, DASHBOARD_DATA_TAG] },
 );

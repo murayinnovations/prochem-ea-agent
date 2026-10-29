@@ -1,4 +1,5 @@
 import { unstable_cache } from "next/cache";
+import { DASHBOARD_DATA_TAG, DASHBOARD_REVALIDATE_SECONDS } from "@/lib/cache";
 import { format, subDays } from "date-fns";
 import { createAdminClient } from "@/lib/supabase/server";
 
@@ -95,7 +96,7 @@ export const getApKpis = unstable_cache(
     return { openApTotal, openApCount, openPoTotal, openPoCount, apInvoices30d };
   },
   ["payables-kpis"],
-  { revalidate: 120 },
+  { revalidate: DASHBOARD_REVALIDATE_SECONDS, tags: [DASHBOARD_DATA_TAG] },
 );
 
 export const listApInvoices = unstable_cache(
@@ -151,7 +152,7 @@ export const listApInvoices = unstable_cache(
     return { rows, total };
   },
   ["ap-invoices-list"],
-  { revalidate: 60 },
+  { revalidate: DASHBOARD_REVALIDATE_SECONDS, tags: [DASHBOARD_DATA_TAG] },
 );
 
 export const listPurchaseOrders = unstable_cache(
@@ -201,7 +202,7 @@ export const listPurchaseOrders = unstable_cache(
     return { rows, total };
   },
   ["purchase-orders-list"],
-  { revalidate: 60 },
+  { revalidate: DASHBOARD_REVALIDATE_SECONDS, tags: [DASHBOARD_DATA_TAG] },
 );
 
 export const getOpenPurchaseOrdersValue = unstable_cache(
@@ -223,5 +224,5 @@ export const getOpenPurchaseOrdersValue = unstable_cache(
     return total;
   },
   ["purchase-orders-open-value"],
-  { revalidate: 120 },
+  { revalidate: DASHBOARD_REVALIDATE_SECONDS, tags: [DASHBOARD_DATA_TAG] },
 );

@@ -5,6 +5,7 @@
  * (SKU-level). The /brands route and page title stay as-is.
  */
 import { unstable_cache } from "next/cache";
+import { DASHBOARD_DATA_TAG, DASHBOARD_REVALIDATE_SECONDS } from "@/lib/cache";
 import { z } from "zod";
 import { format, subDays, subMonths } from "date-fns";
 import { createAdminClient } from "@/lib/supabase/server";
@@ -159,7 +160,7 @@ export const listSkus = unstable_cache(
     return { rows: rows.slice(start, start + f.pageSize), total };
   },
   ["brands-skus-list"],
-  { revalidate: 300 },
+  { revalidate: DASHBOARD_REVALIDATE_SECONDS, tags: [DASHBOARD_DATA_TAG] },
 );
 
 // ── getItemGroupRollup ────────────────────────────────────────────────────────
@@ -211,7 +212,7 @@ export const getItemGroupRollup = unstable_cache(
       .sort((a, b) => b.revenue_kes - a.revenue_kes);
   },
   ["brands-group-rollup"],
-  { revalidate: 300 },
+  { revalidate: DASHBOARD_REVALIDATE_SECONDS, tags: [DASHBOARD_DATA_TAG] },
 );
 
 // ── getSkuDetail ──────────────────────────────────────────────────────────────
@@ -310,7 +311,7 @@ export const getSkuDetail = unstable_cache(
     };
   },
   ["brands-sku-detail"],
-  { revalidate: 300 },
+  { revalidate: DASHBOARD_REVALIDATE_SECONDS, tags: [DASHBOARD_DATA_TAG] },
 );
 
 // ── getFastMovingSkus ─────────────────────────────────────────────────────────
@@ -425,7 +426,7 @@ export const getFastMovingSkus = unstable_cache(
     return { granularity, skus };
   },
   ["brands-fast-moving-skus"],
-  { revalidate: 300 },
+  { revalidate: DASHBOARD_REVALIDATE_SECONDS, tags: [DASHBOARD_DATA_TAG] },
 );
 
 // ── getSkuVolumeTrend ─────────────────────────────────────────────────────────
@@ -479,7 +480,7 @@ export const getSkuVolumeTrend = unstable_cache(
     return { granularity, series };
   },
   ["brands-sku-volume-trend"],
-  { revalidate: 300 },
+  { revalidate: DASHBOARD_REVALIDATE_SECONDS, tags: [DASHBOARD_DATA_TAG] },
 );
 
 // ── getItemGroups ─────────────────────────────────────────────────────────────
@@ -500,5 +501,5 @@ export const getItemGroups = unstable_cache(
     return Array.from(set).sort();
   },
   ["brands-item-groups"],
-  { revalidate: 600 },
+  { revalidate: DASHBOARD_REVALIDATE_SECONDS, tags: [DASHBOARD_DATA_TAG] },
 );

@@ -1,4 +1,5 @@
 import { unstable_cache } from "next/cache";
+import { DASHBOARD_DATA_TAG, DASHBOARD_REVALIDATE_SECONDS } from "@/lib/cache";
 import { createAdminClient } from "@/lib/supabase/server";
 import { fetchAllRows } from "@/lib/supabase/paginate";
 
@@ -137,7 +138,7 @@ export const getCurrentStock = unstable_cache(
     return { items, snapshot_at: snapshotAt };
   },
   ["stock-current"],
-  { revalidate: 300 },
+  { revalidate: DASHBOARD_REVALIDATE_SECONDS, tags: [DASHBOARD_DATA_TAG] },
 );
 
 export const getStockTrend = unstable_cache(
@@ -164,7 +165,7 @@ export const getStockTrend = unstable_cache(
     }));
   },
   ["stock-trend"],
-  { revalidate: 300 },
+  { revalidate: DASHBOARD_REVALIDATE_SECONDS, tags: [DASHBOARD_DATA_TAG] },
 );
 
 export const getLowStockItems = unstable_cache(
@@ -173,7 +174,7 @@ export const getLowStockItems = unstable_cache(
     return items.filter((r) => r.total_available <= threshold).slice(0, limit);
   },
   ["stock-low"],
-  { revalidate: 300 },
+  { revalidate: DASHBOARD_REVALIDATE_SECONDS, tags: [DASHBOARD_DATA_TAG] },
 );
 
 export const getStockWarehouses = unstable_cache(
@@ -204,5 +205,5 @@ export const getStockWarehouses = unstable_cache(
     return Array.from(set).sort();
   },
   ["stock-warehouses"],
-  { revalidate: 600 },
+  { revalidate: DASHBOARD_REVALIDATE_SECONDS, tags: [DASHBOARD_DATA_TAG] },
 );

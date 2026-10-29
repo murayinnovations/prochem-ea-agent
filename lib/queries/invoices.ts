@@ -1,4 +1,5 @@
 import { unstable_cache } from "next/cache";
+import { DASHBOARD_DATA_TAG, DASHBOARD_REVALIDATE_SECONDS } from "@/lib/cache";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/server";
 import { fetchAllRows } from "@/lib/supabase/paginate";
@@ -90,17 +91,26 @@ export const listInvoices = unstable_cache(
       return q.order("doc_entry", { ascending: true }).range(from, to);
     });
 
-    // Resolve customer names (two-step, no FK join)
-    const codes = [...new Set(rows.map((r: { card_code: string }) => r.card_code))];
+    // Resolve customer names (two-step, no FK join). Batches run in parallel.
     const nameMap: Record<string, string | null> = {};
-    if (codes.length > 0) {
-      for (let i = 0; i < codes.length; i += 200) {
-        const { data: custData } = await supabase
-          .from("customers")
-          .select("card_code, card_name")
-          .in("card_code", codes.slice(i, i + 200));
+    const resolveNames = async (codes: string[]) => {
+      const batches: string[][] = [];
+      for (let i = 0; i < codes.length; i += 200) batches.push(codes.slice(i, i + 200));
+      const results = await Promise.all(
+        batches.map((batch) =>
+          supabase.from("customers").select("card_code, card_name").in("card_code", batch),
+        ),
+      );
+      for (const { data: custData } of results) {
         for (const c of custData ?? []) nameMap[c.card_code] = c.card_name as string | null;
       }
+    };
+
+    // Names for every row are only needed to search or sort by customer;
+    // otherwise only the visible page gets resolved (below).
+    const needsAllNames = Boolean(f.customerSearch) || f.sort === "customer";
+    if (needsAllNames) {
+      await resolveNames([...new Set(rows.map((r: { card_code: string }) => r.card_code))]);
     }
 
     const now = new Date();
@@ -145,15 +155,18 @@ export const listInvoices = unstable_cache(
 
     const total = enriched.length;
     const start = (f.page - 1) * f.pageSize;
-    const pageRows: InvoiceListRow[] = enriched
-      .slice(start, start + f.pageSize)
+    const visible = enriched.slice(start, start + f.pageSize);
+    if (!needsAllNames) {
+      await resolveNames([...new Set(visible.map((r) => r.card_code as string))]);
+    }
+    const pageRows: InvoiceListRow[] = visible
       .map((r) => ({
         doc_entry: r.doc_entry,
         doc_num: r.doc_num,
         doc_date: r.doc_date as string,
         doc_due_date: r.doc_due_date as string | null,
         card_code: r.card_code,
-        card_name: r.card_name,
+        card_name: nameMap[r.card_code] ?? null,
         doc_currency: r.doc_currency as string | null,
         doc_total: Number(r.doc_total ?? 0),
         paid_to_date_sys: Number(r.paid_to_date_sys ?? 0),
@@ -165,7 +178,7 @@ export const listInvoices = unstable_cache(
     return { rows: pageRows, total, totals };
   },
   ["invoices-list"],
-  { revalidate: 60 },
+  { revalidate: DASHBOARD_REVALIDATE_SECONDS, tags: [DASHBOARD_DATA_TAG] },
 );
 
 // ── getInvoiceDetail ──────────────────────────────────────────────────────────
@@ -206,7 +219,7 @@ export const getInvoiceDetail = unstable_cache(
     };
   },
   ["invoices-detail"],
-  { revalidate: 120 },
+  { revalidate: DASHBOARD_REVALIDATE_SECONDS, tags: [DASHBOARD_DATA_TAG] },
 );
 
 // ── getInvoiceLines ───────────────────────────────────────────────────────────
@@ -242,7 +255,7 @@ export const getInvoiceLines = unstable_cache(
     }));
   },
   ["invoices-lines"],
-  { revalidate: 300 },
+  { revalidate: DASHBOARD_REVALIDATE_SECONDS, tags: [DASHBOARD_DATA_TAG] },
 );
 
 // ── getPaymentsNearInvoice ────────────────────────────────────────────────────
@@ -266,5 +279,5 @@ export const getPaymentsNearInvoice = unstable_cache(
     }));
   },
   ["invoices-payments-near"],
-  { revalidate: 60 },
+  { revalidate: DASHBOARD_REVALIDATE_SECONDS, tags: [DASHBOARD_DATA_TAG] },
 );

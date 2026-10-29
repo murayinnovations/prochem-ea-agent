@@ -1,4 +1,5 @@
 import { unstable_cache } from "next/cache";
+import { DASHBOARD_DATA_TAG, DASHBOARD_REVALIDATE_SECONDS } from "@/lib/cache";
 import { z } from "zod";
 import { format, subDays, subMonths, differenceInDays } from "date-fns";
 import { createAdminClient } from "@/lib/supabase/server";
@@ -129,7 +130,7 @@ export const getCustomersPortfolioKpis = unstable_cache(
     return { rev30Total, arTotal };
   },
   ["customers-portfolio-kpis"],
-  { revalidate: 60 },
+  { revalidate: DASHBOARD_REVALIDATE_SECONDS, tags: [DASHBOARD_DATA_TAG] },
 );
 
 // ── listCustomers ─────────────────────────────────────────────────────────────
@@ -271,7 +272,7 @@ export const listCustomers = unstable_cache(
     return { rows, total };
   },
   ["customers-list"],
-  { revalidate: 60 },
+  { revalidate: DASHBOARD_REVALIDATE_SECONDS, tags: [DASHBOARD_DATA_TAG] },
 );
 
 // ── getCustomerDetail ─────────────────────────────────────────────────────────
@@ -313,7 +314,7 @@ export const getCustomerDetail = unstable_cache(
     };
   },
   ["customers-detail"],
-  { revalidate: 120 },
+  { revalidate: DASHBOARD_REVALIDATE_SECONDS, tags: [DASHBOARD_DATA_TAG] },
 );
 
 // ── getCustomerRevenueTrend ───────────────────────────────────────────────────
@@ -346,7 +347,7 @@ export const getCustomerRevenueTrend = unstable_cache(
       .map(([month, { rev, cnt }]) => ({ month, revenue_kes: rev, invoice_count: cnt }));
   },
   ["customers-revenue-trend"],
-  { revalidate: 300 },
+  { revalidate: DASHBOARD_REVALIDATE_SECONDS, tags: [DASHBOARD_DATA_TAG] },
 );
 
 // ── getCustomerARAging ────────────────────────────────────────────────────────
@@ -386,7 +387,7 @@ export const getCustomerARAging = unstable_cache(
     return aging;
   },
   ["customers-ar-aging"],
-  { revalidate: 60 },
+  { revalidate: DASHBOARD_REVALIDATE_SECONDS, tags: [DASHBOARD_DATA_TAG] },
 );
 
 // ── getCustomerRecentInvoices ─────────────────────────────────────────────────
@@ -404,7 +405,7 @@ export const getCustomerRecentInvoices = unstable_cache(
     return (data ?? []) as InvoiceRow[];
   },
   ["customers-recent-invoices"],
-  { revalidate: 60 },
+  { revalidate: DASHBOARD_REVALIDATE_SECONDS, tags: [DASHBOARD_DATA_TAG] },
 );
 
 // ── getCustomerRecentPayments ─────────────────────────────────────────────────
@@ -422,7 +423,7 @@ export const getCustomerRecentPayments = unstable_cache(
     return (data ?? []) as PaymentRow[];
   },
   ["customers-recent-payments"],
-  { revalidate: 60 },
+  { revalidate: DASHBOARD_REVALIDATE_SECONDS, tags: [DASHBOARD_DATA_TAG] },
 );
 
 // ── getCustomerCountries ──────────────────────────────────────────────────────
@@ -445,5 +446,5 @@ export const getCustomerCountries = unstable_cache(
     return Array.from(set).sort();
   },
   ["customers-countries"],
-  { revalidate: 600 },
+  { revalidate: DASHBOARD_REVALIDATE_SECONDS, tags: [DASHBOARD_DATA_TAG] },
 );

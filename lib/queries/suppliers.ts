@@ -1,4 +1,5 @@
 import { unstable_cache } from "next/cache";
+import { DASHBOARD_DATA_TAG, DASHBOARD_REVALIDATE_SECONDS } from "@/lib/cache";
 import { createAdminClient } from "@/lib/supabase/server";
 import { fetchAllRows } from "@/lib/supabase/paginate";
 
@@ -54,7 +55,7 @@ export const getSuppliersKpis = unstable_cache(
     return { totalSuppliers, totalPayables, activeSuppliers };
   },
   ["suppliers-kpis"],
-  { revalidate: 120 },
+  { revalidate: DASHBOARD_REVALIDATE_SECONDS, tags: [DASHBOARD_DATA_TAG] },
 );
 
 export const listSuppliers = unstable_cache(
@@ -113,7 +114,7 @@ export const listSuppliers = unstable_cache(
     return { rows, total };
   },
   ["suppliers-list"],
-  { revalidate: 60 },
+  { revalidate: DASHBOARD_REVALIDATE_SECONDS, tags: [DASHBOARD_DATA_TAG] },
 );
 
 export const getSupplierCountries = unstable_cache(
@@ -133,5 +134,5 @@ export const getSupplierCountries = unstable_cache(
     return Array.from(set).sort();
   },
   ["suppliers-countries"],
-  { revalidate: 600 },
+  { revalidate: DASHBOARD_REVALIDATE_SECONDS, tags: [DASHBOARD_DATA_TAG] },
 );
