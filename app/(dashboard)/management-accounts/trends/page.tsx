@@ -4,6 +4,9 @@ import { PageHeader } from "@/components/dashboard/page-header";
 import { TrendsChart, type TrendSeriesOption } from "@/components/dashboard/management-accounts/trends-chart";
 import { getManagementAccountsTrends } from "@/lib/queries/management-accounts";
 
+// Reads live Supabase data — render per request instead of prerendering at build time.
+export const dynamic = "force-dynamic";
+
 export default async function ManagementAccountsTrendsPage() {
   const data = await getManagementAccountsTrends();
 

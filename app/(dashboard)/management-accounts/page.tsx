@@ -17,6 +17,9 @@ import { SparklineCard } from "@/components/dashboard/management-accounts/sparkl
 import { listManagementAccountsUploads } from "@/lib/queries/management-accounts";
 import { formatKES, formatDateTime } from "@/lib/formatters";
 
+// Reads live Supabase data — render per request instead of prerendering at build time.
+export const dynamic = "force-dynamic";
+
 function statusBadge(status: string) {
   if (status === "success") return null;
   const styles =

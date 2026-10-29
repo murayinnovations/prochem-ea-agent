@@ -13,6 +13,9 @@ import {
 import { getCurrentStock } from "@/lib/queries/stock";
 import { formatDate } from "@/lib/formatters";
 
+// Reads live Supabase data — render per request instead of prerendering at build time.
+export const dynamic = "force-dynamic";
+
 export default async function StockPage() {
   const { items, snapshot_at } = await getCurrentStock();
 

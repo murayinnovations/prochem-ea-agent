@@ -14,6 +14,9 @@ import { getSuppliersKpis, listSuppliers } from "@/lib/queries/suppliers";
 import { getApKpis, listApInvoices, listPurchaseOrders } from "@/lib/queries/payables";
 import { formatKES, formatDate } from "@/lib/formatters";
 
+// Reads live Supabase data — render per request instead of prerendering at build time.
+export const dynamic = "force-dynamic";
+
 function EmptySection({ icon: Icon, label }: { icon: React.ElementType; label: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-12 text-center">
