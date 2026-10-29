@@ -44,7 +44,7 @@ export default async function SkuDetailPage({ params }: Props) {
       />
 
       {/* KPI row */}
-      <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
         <KpiStat label="Revenue (12mo)" value={formatKES(sku.revenue12mo)} icon={DollarSign} />
         <KpiStat label="Volume (12mo)" value={sku.volume12mo.toLocaleString()} icon={BarChart2} />
         <KpiStat label="Customers" value={sku.customer_count.toLocaleString()} icon={Package} />

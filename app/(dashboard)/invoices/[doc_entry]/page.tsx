@@ -55,7 +55,7 @@ export default async function InvoiceDetailPage({ params }: Props) {
       />
 
       {/* KPI row */}
-      <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
         <KpiStat label="Invoice total" value={formatKES(invoice.doc_total)} icon={DollarSign} />
         <KpiStat label="Outstanding" value={formatKES(invoice.outstanding)} icon={CreditCard} />
         <KpiStat
@@ -138,17 +138,17 @@ export default async function InvoiceDetailPage({ params }: Props) {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-slate-100 text-left text-xs font-medium uppercase tracking-wider text-slate-400">
-                      <th className="pb-2">#</th>
+                      <th className="hidden pb-2 sm:table-cell">#</th>
                       <th className="pb-2">Item</th>
                       <th className="pb-2 text-right">Qty</th>
-                      <th className="pb-2 text-right">Price</th>
+                      <th className="hidden pb-2 text-right sm:table-cell">Price</th>
                       <th className="pb-2 text-right">Total</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
                     {lines.map((line) => (
                       <tr key={line.line_num} className="hover:bg-slate-50">
-                        <td className="py-2 text-slate-400">{line.line_num + 1}</td>
+                        <td className="hidden py-2 text-slate-400 sm:table-cell">{line.line_num + 1}</td>
                         <td className="py-2">
                           <p className="font-medium text-slate-900">{line.item_name ?? line.item_code}</p>
                           <p className="text-xs text-slate-400">{line.item_code}</p>
@@ -156,10 +156,10 @@ export default async function InvoiceDetailPage({ params }: Props) {
                         <td className="py-2 text-right text-slate-600">
                           {line.quantity != null ? line.quantity.toLocaleString() : "—"}
                         </td>
-                        <td className="py-2 text-right text-slate-600">
+                        <td className="hidden whitespace-nowrap py-2 text-right text-slate-600 sm:table-cell">
                           {line.price != null ? formatKES(line.price) : "—"}
                         </td>
-                        <td className="py-2 text-right font-medium text-slate-900">
+                        <td className="whitespace-nowrap py-2 pl-2 text-right font-medium text-slate-900">
                           {formatKES(line.line_total)}
                         </td>
                       </tr>
@@ -167,10 +167,13 @@ export default async function InvoiceDetailPage({ params }: Props) {
                   </tbody>
                   <tfoot>
                     <tr className="border-t border-slate-200">
-                      <td colSpan={4} className="pt-2 text-right text-xs font-medium text-slate-500">
+                      <td colSpan={2} className="pt-2 text-right text-xs font-medium text-slate-500 sm:hidden">
                         TOTAL
                       </td>
-                      <td className="pt-2 text-right font-semibold text-slate-900">
+                      <td colSpan={4} className="hidden pt-2 text-right text-xs font-medium text-slate-500 sm:table-cell">
+                        TOTAL
+                      </td>
+                      <td className="whitespace-nowrap pt-2 pl-2 text-right font-semibold text-slate-900">
                         {formatKES(invoice.doc_total)}
                       </td>
                     </tr>

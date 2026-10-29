@@ -32,7 +32,7 @@ export default async function CustomersPage({ searchParams }: Props) {
         subtitle={`${total.toLocaleString()} customer${total !== 1 ? "s" : ""}${filters.activeOnly ? " · active only" : ""}`}
       />
 
-      <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 [&>*:last-child:nth-child(odd)]:col-span-2 sm:[&>*:last-child:nth-child(odd)]:col-span-1">
         <KpiStat label="Customers shown" value={total.toLocaleString()} icon={Users} />
         <KpiStat label="Revenue (30d)" value={formatKES(rev30Total)} />
         <KpiStat label="Outstanding AR" value={formatKES(arTotal)} />

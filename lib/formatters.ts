@@ -1,4 +1,4 @@
-import { format as dateFnsFormat } from "date-fns";
+import { format as dateFnsFormat, parseISO } from "date-fns";
 
 export function formatKES(amount: number): string {
   const abs = Math.abs(amount);
@@ -20,7 +20,9 @@ export function formatKESFull(amount: number): string {
 export function formatDate(dateStr: string): string {
   if (!dateStr) return "—";
   try {
-    return dateFnsFormat(new Date(dateStr + "T00:00:00"), "dd MMM yyyy");
+    // parseISO reads bare dates as local midnight and also accepts full
+    // timestamps (e.g. sap_create_date), which "T00:00:00" suffixing broke.
+    return dateFnsFormat(parseISO(dateStr), "dd MMM yyyy");
   } catch {
     return dateStr;
   }

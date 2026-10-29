@@ -8,6 +8,7 @@
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
+import { fetchAllRows } from "@/lib/supabase/paginate";
 
 type DB = SupabaseClient<Database>;
 
@@ -127,14 +128,16 @@ export function createToolHandlers(db: DB) {
     async get_revenue_summary(
       args: z.infer<typeof toolSchemas.get_revenue_summary>,
     ) {
-      const { data } = await db
-        .from("invoices")
-        .select("doc_total, vat_sum, card_code")
-        .gte("doc_date", args.period.start)
-        .lte("doc_date", args.period.end)
-        .eq("cancelled", false);
-
-      const rows = data ?? [];
+      const rows = await fetchAllRows<{ doc_total: number; vat_sum: number; card_code: string }>("get_revenue_summary", (from, to) =>
+        db
+          .from("invoices")
+          .select("doc_total, vat_sum, card_code")
+          .gte("doc_date", args.period.start)
+          .lte("doc_date", args.period.end)
+          .eq("cancelled", false)
+          .order("doc_entry", { ascending: true })
+          .range(from, to),
+      );
       const total_revenue_kes = rows.reduce(
         (s, r) => s + Number(r.doc_total ?? 0) - Number(r.vat_sum ?? 0),
         0,
@@ -153,16 +156,20 @@ export function createToolHandlers(db: DB) {
     async get_top_customers(
       args: z.infer<typeof toolSchemas.get_top_customers>,
     ) {
-      const { data } = await db
-        .from("invoices")
-        .select("card_code, doc_total, vat_sum")
-        .gte("doc_date", args.period.start)
-        .lte("doc_date", args.period.end)
-        .eq("cancelled", false);
+      const rows = await fetchAllRows<{ card_code: string; doc_total: number; vat_sum: number }>("top customers tool", (from, to) =>
+        db
+          .from("invoices")
+          .select("card_code, doc_total, vat_sum")
+          .gte("doc_date", args.period.start)
+          .lte("doc_date", args.period.end)
+          .eq("cancelled", false)
+          .order("doc_entry", { ascending: true })
+          .range(from, to),
+      );
 
       // Aggregate by customer
       const map = new Map<string, { total: number; count: number }>();
-      for (const r of data ?? []) {
+      for (const r of rows) {
         const prev = map.get(r.card_code) ?? { total: 0, count: 0 };
         map.set(r.card_code, {
           total: prev.total + Number(r.doc_total ?? 0) - Number(r.vat_sum ?? 0),
@@ -191,14 +198,18 @@ export function createToolHandlers(db: DB) {
     // ── get_outstanding_ar ──────────────────────────────────────────────────
     async get_outstanding_ar(_args: z.infer<typeof toolSchemas.get_outstanding_ar>) {
       // Use SAP's authoritative per-customer balance (OCRD.Balance) — matches SAP UI.
-      const [balResult, cntResult] = await Promise.all([
-        db
-          .from("customers")
-          .select("card_code, card_name, balance")
-          .eq("card_type", "C")
-          .eq("valid", true)
-          .gt("balance", 0)
-          .order("balance", { ascending: false }),
+      const [rows, cntResult] = await Promise.all([
+        fetchAllRows<{ card_code: string; card_name: string | null; balance: number }>("get_ar_overview", (from, to) =>
+          db
+            .from("customers")
+            .select("card_code, card_name, balance")
+            .eq("card_type", "C")
+            .eq("valid", true)
+            .gt("balance", 0)
+            .order("balance", { ascending: false })
+            .order("card_code", { ascending: true })
+            .range(from, to),
+        ),
         db
           .from("invoices")
           .select("*", { count: "exact", head: true })
@@ -206,7 +217,6 @@ export function createToolHandlers(db: DB) {
           .eq("cancelled", false),
       ]);
 
-      const rows = balResult.data ?? [];
       const total_ar_kes = rows.reduce((s, r) => s + Number(r.balance ?? 0), 0);
 
       return {
@@ -223,13 +233,16 @@ export function createToolHandlers(db: DB) {
     // ── compare_periods ─────────────────────────────────────────────────────
     async compare_periods(args: z.infer<typeof toolSchemas.compare_periods>) {
       async function fetch(start: string, end: string) {
-        const { data } = await db
-          .from("invoices")
-          .select("doc_total, vat_sum")
-          .gte("doc_date", start)
-          .lte("doc_date", end)
-          .eq("cancelled", false);
-        const rows = data ?? [];
+        const rows = await fetchAllRows<{ doc_total: number; vat_sum: number }>("compare_periods", (from, to) =>
+          db
+            .from("invoices")
+            .select("doc_total, vat_sum")
+            .gte("doc_date", start)
+            .lte("doc_date", end)
+            .eq("cancelled", false)
+            .order("doc_entry", { ascending: true })
+            .range(from, to),
+        );
         return {
           revenue: rows.reduce((s, r) => s + Number(r.doc_total ?? 0) - Number(r.vat_sum ?? 0), 0),
           invoices: rows.length,
@@ -264,16 +277,20 @@ export function createToolHandlers(db: DB) {
       start.setDate(start.getDate() - args.days);
       const startStr = start.toISOString().split("T")[0];
 
-      const { data } = await db
-        .from("invoices")
-        .select("doc_date, doc_total, vat_sum")
-        .gte("doc_date", startStr)
-        .eq("cancelled", false)
-        .order("doc_date", { ascending: true });
+      const rows = await fetchAllRows<{ doc_date: string; doc_total: number; vat_sum: number }>("revenue trend tool", (from, to) =>
+        db
+          .from("invoices")
+          .select("doc_date, doc_total, vat_sum")
+          .gte("doc_date", startStr)
+          .eq("cancelled", false)
+          .order("doc_date", { ascending: true })
+          .order("doc_entry", { ascending: true })
+          .range(from, to),
+      );
 
       // Group by date
       const byDate = new Map<string, number>();
-      for (const r of data ?? []) {
+      for (const r of rows) {
         const d = r.doc_date as string;
         byDate.set(d, (byDate.get(d) ?? 0) + Number(r.doc_total ?? 0) - Number(r.vat_sum ?? 0));
       }
@@ -414,31 +431,35 @@ export function createToolHandlers(db: DB) {
           : q;
       }
 
-      const [currRes, priorRes] = await Promise.all([
-        applyItemFilter(
-          db.from("invoice_lines")
-            .select("item_code, quantity, line_total")
-            .gte("doc_date", dCurrent)
-            .lte("doc_date", dNow),
+      const [currRows, priorRows] = await Promise.all([
+        fetchAllRows<{ item_code: string; quantity: number; line_total: number }>("fast movers current", (from, to) =>
+          applyItemFilter(
+            db.from("invoice_lines")
+              .select("item_code, quantity, line_total")
+              .gte("doc_date", dCurrent)
+              .lte("doc_date", dNow),
+          ).order("doc_entry", { ascending: true }).order("line_num", { ascending: true }).range(from, to),
         ),
-        applyItemFilter(
-          db.from("invoice_lines")
-            .select("item_code, quantity")
-            .gte("doc_date", dPrior)
-            .lt("doc_date", dCurrent),
+        fetchAllRows<{ item_code: string; quantity: number }>("fast movers prior", (from, to) =>
+          applyItemFilter(
+            db.from("invoice_lines")
+              .select("item_code, quantity")
+              .gte("doc_date", dPrior)
+              .lt("doc_date", dCurrent),
+          ).order("doc_entry", { ascending: true }).order("line_num", { ascending: true }).range(from, to),
         ),
       ]);
 
       const currVol = new Map<string, number>();
       const currRev = new Map<string, number>();
-      for (const r of currRes.data ?? []) {
+      for (const r of currRows) {
         const code = r.item_code as string;
         currVol.set(code, (currVol.get(code) ?? 0) + Number(r.quantity ?? 0));
         currRev.set(code, (currRev.get(code) ?? 0) + Number(r.line_total ?? 0));
       }
 
       const priorVol = new Map<string, number>();
-      for (const r of priorRes.data ?? []) {
+      for (const r of priorRows) {
         const code = r.item_code as string;
         priorVol.set(code, (priorVol.get(code) ?? 0) + Number(r.quantity ?? 0));
       }
@@ -503,15 +524,21 @@ export function createToolHandlers(db: DB) {
     async get_sales_employee_breakdown(
       args: z.infer<typeof toolSchemas.get_sales_employee_breakdown>,
     ) {
-      const { data } = await db
-        .from("invoices")
-        .select("slp_name, doc_total, vat_sum, paid_to_date_sys")
-        .gte("doc_date", args.period.start)
-        .lte("doc_date", args.period.end)
-        .eq("cancelled", false);
+      const rows = await fetchAllRows<{ slp_name: string | null; doc_total: number; vat_sum: number; paid_to_date_sys: number }>(
+        "sales employee tool",
+        (from, to) =>
+          db
+            .from("invoices")
+            .select("slp_name, doc_total, vat_sum, paid_to_date_sys")
+            .gte("doc_date", args.period.start)
+            .lte("doc_date", args.period.end)
+            .eq("cancelled", false)
+            .order("doc_entry", { ascending: true })
+            .range(from, to),
+      );
 
       const map = new Map<string, { rev: number; cnt: number; paid: number }>();
-      for (const r of data ?? []) {
+      for (const r of rows) {
         const name = (r.slp_name as string | null) ?? "(unassigned)";
         const prev = map.get(name) ?? { rev: 0, cnt: 0, paid: 0 };
         map.set(name, {
@@ -560,12 +587,15 @@ export function createToolHandlers(db: DB) {
       }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let q: any = db
-        .from("stock_snapshots")
-        .select("item_code, whs_code, on_hand, committed, available")
-        .eq("snapshot_at", latestRow.snapshot_at);
-      if (args.whs_code) q = q.eq("whs_code", args.whs_code);
-      const { data } = await q;
+      const data = await fetchAllRows<any>("stock tool", (from, to) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let q: any = db
+          .from("stock_snapshots")
+          .select("item_code, whs_code, on_hand, committed, available")
+          .eq("snapshot_at", latestRow.snapshot_at);
+        if (args.whs_code) q = q.eq("whs_code", args.whs_code);
+        return q.order("id", { ascending: true }).range(from, to);
+      });
 
       const map = new Map<string, { on_hand: number; available: number; warehouses: string[] }>();
       for (const r of data ?? []) {
@@ -613,13 +643,17 @@ export function createToolHandlers(db: DB) {
     async get_accounts_payable(
       _args: z.infer<typeof toolSchemas.get_accounts_payable>
     ) {
-      const [balResult, apCountResult] = await Promise.all([
-        db
-          .from("suppliers")
-          .select("card_code, card_name, balance")
-          .eq("valid", true)
-          .gt("balance", 0)
-          .order("balance", { ascending: false }),
+      const [suppliers, apCountResult] = await Promise.all([
+        fetchAllRows<{ card_code: string; card_name: string | null; balance: number }>("get_accounts_payable", (from, to) =>
+          db
+            .from("suppliers")
+            .select("card_code, card_name, balance")
+            .eq("valid", true)
+            .gt("balance", 0)
+            .order("balance", { ascending: false })
+            .order("card_code", { ascending: true })
+            .range(from, to),
+        ),
         db
           .from("ap_invoices")
           .select("*", { count: "exact", head: true })
@@ -627,7 +661,6 @@ export function createToolHandlers(db: DB) {
           .eq("cancelled", false),
       ]);
 
-      const suppliers = balResult.data ?? [];
       const totalPayables = suppliers.reduce((s, r) => s + Number(r.balance ?? 0), 0);
 
       return {
@@ -650,21 +683,19 @@ export function createToolHandlers(db: DB) {
     async get_ap_invoices_summary(
       args: z.infer<typeof toolSchemas.get_ap_invoices_summary>
     ) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let q: any = db
-        .from("ap_invoices")
-        .select("doc_total, paid_to_date, card_code, doc_date, doc_status")
-        .eq("cancelled", false);
-
       const status = args.status ?? "O";
-      q = q.eq("doc_status", status);
-
-      if (args.period) {
-        q = q.gte("doc_date", args.period.start).lte("doc_date", args.period.end);
-      }
-
-      const { data } = await q;
-      const rows = (data ?? []) as Array<Record<string, unknown>>;
+      const rows = await fetchAllRows<Record<string, unknown>>("payables tool", (from, to) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let q: any = db
+          .from("ap_invoices")
+          .select("doc_total, paid_to_date, card_code, doc_date, doc_status")
+          .eq("cancelled", false)
+          .eq("doc_status", status);
+        if (args.period) {
+          q = q.gte("doc_date", args.period.start).lte("doc_date", args.period.end);
+        }
+        return q.order("doc_entry", { ascending: true }).range(from, to);
+      });
 
       let totalAmount = 0;
       let totalOutstanding = 0;

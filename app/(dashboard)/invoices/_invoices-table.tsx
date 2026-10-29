@@ -29,6 +29,7 @@ const COLUMNS: ColumnDef<InvoiceListRow>[] = [
   },
   {
     key: "customer",
+    mobile: "title",
     header: "Customer",
     sortKey: "customer",
     cell: (row) => (
@@ -59,6 +60,7 @@ const COLUMNS: ColumnDef<InvoiceListRow>[] = [
   },
   {
     key: "status",
+    mobile: "badge",
     header: "Status",
     cell: (row) => {
       if (row.age_days != null && row.age_days > 0) return <StatusBadge variant="overdue" />;

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import {
   BarChart,
   Bar,
@@ -16,7 +17,9 @@ export interface CustomerRevenue {
 }
 
 const Y_WIDTH = 172;
+const Y_WIDTH_NARROW = 112;
 const MAX_CHARS = 22;
+const MAX_CHARS_NARROW = 16;
 
 function fmtTick(v: number): string {
   if (v >= 1e9) return `${(v / 1e9).toFixed(1)}B`;
@@ -34,11 +37,24 @@ function fmtTooltip(v: unknown): string {
 }
 
 // Truncates long names so they fit the fixed Y-axis width.
-function truncate(name: string): string {
-  if (name.length <= MAX_CHARS) return name;
+function truncate(name: string, max: number): string {
+  if (name.length <= max) return name;
   // Prefer word-boundary truncation
-  const cut = name.slice(0, MAX_CHARS).replace(/\s\S+$/, "");
-  return (cut || name.slice(0, MAX_CHARS)) + "…";
+  const cut = name.slice(0, max).replace(/\s\S+$/, "");
+  return (cut || name.slice(0, max)) + "…";
+}
+
+// Phones can't spare 172px for labels — shrink the axis below Tailwind's sm.
+function useNarrow(): boolean {
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 639px)");
+    const update = () => setNarrow(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+  return narrow;
 }
 
 // Custom tick — shows truncated label; SVG <title> gives full name on hover.
@@ -47,7 +63,7 @@ function YTick(props: any) {
   const x: number = typeof props.x === "number" ? props.x : 0;
   const y: number = typeof props.y === "number" ? props.y : 0;
   const full: string = props.payload?.value ?? "";
-  const short = truncate(full);
+  const short = truncate(full, props.maxChars ?? MAX_CHARS);
   return (
     <g transform={`translate(${x},${y})`}>
       <title>{full}</title>
@@ -59,6 +75,7 @@ function YTick(props: any) {
 }
 
 export function TopCustomersChart({ data }: { data: CustomerRevenue[] }) {
+  const narrow = useNarrow();
   return (
     <ResponsiveContainer width="100%" height={260}>
       <BarChart
@@ -81,8 +98,9 @@ export function TopCustomersChart({ data }: { data: CustomerRevenue[] }) {
         <YAxis
           type="category"
           dataKey="card_name"
-          tick={YTick}
-          width={Y_WIDTH}
+          tick={<YTick maxChars={narrow ? MAX_CHARS_NARROW : MAX_CHARS} />}
+          interval={0}
+          width={narrow ? Y_WIDTH_NARROW : Y_WIDTH}
           axisLine={false}
           tickLine={false}
         />

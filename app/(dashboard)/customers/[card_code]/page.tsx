@@ -55,7 +55,7 @@ export default async function CustomerDetailPage({ params }: Props) {
       />
 
       {/* KPI row */}
-      <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
         <KpiStat label="Revenue (12mo)" value={formatKES(customer.revenue12mo)} icon={DollarSign} />
         <KpiStat label="Outstanding AR" value={formatKES(customer.ar)} icon={CreditCard} />
         <KpiStat label="Total Invoices" value={customer.totalInvoices.toLocaleString()} />
@@ -176,14 +176,14 @@ export default async function CustomerDetailPage({ params }: Props) {
               <p className="py-4 text-center text-sm text-slate-400">No invoices found.</p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full text-xs sm:text-sm">
                   <thead>
                     <tr className="border-b border-slate-100 text-left text-xs font-medium uppercase tracking-wider text-slate-400">
                       <th className="pb-2">Doc #</th>
                       <th className="pb-2">Date</th>
                       <th className="pb-2 text-right">Total</th>
-                      <th className="pb-2 text-right">Outstanding</th>
-                      <th className="pb-2">Status</th>
+                      <th className="pb-2 pl-2 sm:pl-3 text-right">Outstanding</th>
+                      <th className="hidden pb-2 pl-2 sm:pl-3 sm:table-cell">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
@@ -199,16 +199,16 @@ export default async function CustomerDetailPage({ params }: Props) {
                               {inv.doc_num ?? inv.doc_entry}
                             </Link>
                           </td>
-                          <td className="py-2 text-slate-500">{formatDate(inv.doc_date)}</td>
-                          <td className="py-2 text-right font-medium">{formatKES(inv.doc_total)}</td>
-                          <td className="py-2 text-right">
+                          <td className="whitespace-nowrap py-2 pl-2 sm:pl-3 text-slate-500">{formatDate(inv.doc_date)}</td>
+                          <td className="whitespace-nowrap py-2 pl-2 sm:pl-3 text-right font-medium">{formatKES(inv.doc_total)}</td>
+                          <td className="whitespace-nowrap py-2 pl-2 sm:pl-3 text-right">
                             {outstanding > 0 ? (
                               <span className="text-amber-700">{formatKES(outstanding)}</span>
                             ) : (
                               <span className="text-slate-300">—</span>
                             )}
                           </td>
-                          <td className="py-2">
+                          <td className="hidden py-2 pl-2 sm:pl-3 sm:table-cell">
                             {inv.doc_status === "O" ? (
                               <StatusBadge variant="open" />
                             ) : (

@@ -28,7 +28,7 @@ export default async function InvoicesPage({ searchParams }: Props) {
         subtitle={`${totals.filtered_count.toLocaleString()} invoice${totals.filtered_count !== 1 ? "s" : ""} · not cancelled`}
       />
 
-      <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
         <KpiStat label="Total (filtered)" value={formatKES(totals.sum_kes)} icon={Receipt} />
         <KpiStat label="Open invoices" value={totals.open_count.toLocaleString()} icon={FileText} />
         <KpiStat label="Open AR" value={formatKES(totals.open_sum_kes)} />

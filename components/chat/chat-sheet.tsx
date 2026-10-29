@@ -235,7 +235,7 @@ export function ChatSheet({ compact = false }: { compact?: boolean } = {}) {
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent
           side="right"
-          className="flex w-full max-w-md flex-col gap-0 p-0 sm:max-w-md"
+          className="flex w-full max-w-md flex-col gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-md"
           showCloseButton={false}
         >
           {/* Header */}

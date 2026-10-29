@@ -71,7 +71,7 @@ export function CustomersFilters({ current, countries }: Props) {
         <option value="lastOrder:desc">Last Order ↓</option>
       </select>
 
-      <label className="flex cursor-pointer items-center gap-1.5 text-sm text-slate-600">
+      <label className="flex w-full cursor-pointer items-center gap-1.5 text-sm text-slate-600 sm:w-auto">
         <input
           type="checkbox"
           checked={current.activeOnly}

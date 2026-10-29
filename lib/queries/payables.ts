@@ -46,6 +46,7 @@ export const getApKpis = unstable_cache(
         .select("doc_total, paid_to_date")
         .eq("doc_status", "O")
         .eq("cancelled", false)
+        .order("doc_entry", { ascending: true })
         .range(page * 1000, (page + 1) * 1000 - 1);
       const rows = data ?? [];
       for (const r of rows) {
@@ -66,6 +67,7 @@ export const getApKpis = unstable_cache(
         .select("doc_total")
         .eq("doc_status", "O")
         .eq("cancelled", false)
+        .order("doc_entry", { ascending: true })
         .range(page * 1000, (page + 1) * 1000 - 1);
       const rows = data ?? [];
       for (const r of rows) {
@@ -83,6 +85,7 @@ export const getApKpis = unstable_cache(
         .select("doc_total")
         .gte("doc_date", d30)
         .eq("cancelled", false)
+        .order("doc_entry", { ascending: true })
         .range(page * 1000, (page + 1) * 1000 - 1);
       const rows = data ?? [];
       for (const r of rows) apInvoices30d += Number(r.doc_total ?? 0);
@@ -123,6 +126,7 @@ export const listApInvoices = unstable_cache(
       )
     )
       .order("doc_date", { ascending: false })
+      .order("doc_entry", { ascending: false })
       .range(pageStart, pageStart + pageSize - 1);
 
     if (error) throw new Error(`listApInvoices: ${error.message}`);
@@ -177,6 +181,7 @@ export const listPurchaseOrders = unstable_cache(
       )
     )
       .order("doc_date", { ascending: false })
+      .order("doc_entry", { ascending: false })
       .range(pageStart, pageStart + pageSize - 1);
 
     if (error) throw new Error(`listPurchaseOrders: ${error.message}`);
@@ -209,6 +214,7 @@ export const getOpenPurchaseOrdersValue = unstable_cache(
         .select("doc_total")
         .eq("doc_status", "O")
         .eq("cancelled", false)
+        .order("doc_entry", { ascending: true })
         .range(page * 1000, (page + 1) * 1000 - 1);
       const rows = data ?? [];
       for (const r of rows) total += Number(r.doc_total ?? 0);

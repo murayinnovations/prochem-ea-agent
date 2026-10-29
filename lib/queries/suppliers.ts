@@ -1,5 +1,6 @@
 import { unstable_cache } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/server";
+import { fetchAllRows } from "@/lib/supabase/paginate";
 
 export interface SupplierRow {
   card_code: string;
@@ -39,6 +40,7 @@ export const getSuppliersKpis = unstable_cache(
       const { data } = await supabase
         .from("suppliers")
         .select("balance, valid")
+        .order("card_code", { ascending: true })
         .range(page * 1000, (page + 1) * 1000 - 1);
       const rows = data ?? [];
       for (const r of rows) {
@@ -93,6 +95,7 @@ export const listSuppliers = unstable_cache(
         .select("card_code, card_name, country, currency, balance, valid, sap_create_date")
     )
       .order(orderCol, { ascending, nullsFirst: false })
+      .order("card_code", { ascending: true })
       .range(pageStart, pageStart + pageSize - 1);
 
     if (error) throw new Error(`listSuppliers: ${error.message}`);
@@ -116,13 +119,17 @@ export const listSuppliers = unstable_cache(
 export const getSupplierCountries = unstable_cache(
   async (): Promise<string[]> => {
     const supabase = createAdminClient();
-    const { data } = await supabase
-      .from("suppliers")
-      .select("country")
-      .eq("valid", true)
-      .not("country", "is", null);
+    const rows = await fetchAllRows<{ country: string | null }>("getSupplierCountries", (from, to) =>
+      supabase
+        .from("suppliers")
+        .select("country")
+        .eq("valid", true)
+        .not("country", "is", null)
+        .order("card_code", { ascending: true })
+        .range(from, to),
+    );
     const set = new Set<string>();
-    for (const r of data ?? []) if (r.country) set.add(r.country as string);
+    for (const r of rows) if (r.country) set.add(r.country);
     return Array.from(set).sort();
   },
   ["suppliers-countries"],

@@ -10,14 +10,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { getCurrentStock, getLowStockItems } from "@/lib/queries/stock";
+import { getCurrentStock } from "@/lib/queries/stock";
 import { formatDate } from "@/lib/formatters";
 
 export default async function StockPage() {
-  const [{ items, snapshot_at }, lowStock] = await Promise.all([
-    getCurrentStock(),
-    getLowStockItems(0, 10),
-  ]);
+  const { items, snapshot_at } = await getCurrentStock();
 
   const totalSkus = items.length;
   const lowStockCount = items.filter((r) => r.total_available <= 0).length;
@@ -53,7 +50,7 @@ export default async function StockPage() {
       {items.length > 0 && (
         <>
           {/* KPI strip */}
-          <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
+          <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 [&>*:last-child:nth-child(odd)]:col-span-2 sm:[&>*:last-child:nth-child(odd)]:col-span-1">
             <KpiStat label="SKUs tracked" value={totalSkus.toLocaleString()} icon={Boxes} />
             <KpiStat label="Zero / negative available" value={lowStockCount.toLocaleString()} />
             <KpiStat label="Snapshot" value={snapshotLabel ?? "—"} />
@@ -81,13 +78,13 @@ export default async function StockPage() {
               <Table>
                 <TableHeader>
                   <TableRow className="border-slate-200 bg-slate-50 hover:bg-slate-50">
-                    <TableHead rowSpan={2} className="align-bottom text-xs font-semibold text-slate-600">Item</TableHead>
-                    <TableHead rowSpan={2} className="align-bottom text-xs font-semibold text-slate-600">Group</TableHead>
+                    <TableHead rowSpan={2} className="sticky left-0 z-10 bg-slate-50 align-bottom text-xs font-semibold text-slate-600">Item</TableHead>
+                    <TableHead rowSpan={2} className="hidden align-bottom text-xs font-semibold text-slate-600 sm:table-cell">Group</TableHead>
                     <TableHead colSpan={2} className="border-l border-slate-200 text-center text-xs font-semibold text-slate-600">AJS</TableHead>
                     <TableHead colSpan={2} className="border-l border-slate-200 text-center text-xs font-semibold text-slate-600">SAKU</TableHead>
                     <TableHead colSpan={2} className="border-l border-slate-200 text-center text-xs font-semibold text-slate-600">Other</TableHead>
                     <TableHead colSpan={2} className="border-l border-slate-200 text-center text-xs font-semibold text-slate-600">Total</TableHead>
-                    <TableHead rowSpan={2} className="align-bottom text-xs font-semibold text-slate-600">UOM</TableHead>
+                    <TableHead rowSpan={2} className="hidden align-bottom text-xs font-semibold text-slate-600 sm:table-cell">UOM</TableHead>
                   </TableRow>
                   <TableRow className="border-slate-200 bg-slate-50 hover:bg-slate-50">
                     <TableHead className="border-l border-slate-200 text-right text-xs font-semibold text-slate-600">On Hand</TableHead>
@@ -104,9 +101,10 @@ export default async function StockPage() {
                   {items.slice(0, 200).map((item) => (
                     <TableRow
                       key={item.item_code}
-                      className="border-slate-100 hover:bg-slate-50"
+                      className="group border-slate-100 hover:bg-slate-50"
                     >
-                      <TableCell className="max-w-[200px]">
+                      {/* Pinned so the item stays visible while warehouse columns scroll on phones */}
+                      <TableCell className="sticky left-0 z-10 max-w-[130px] bg-white group-hover:bg-slate-50 sm:max-w-[200px]">
                         <p className="truncate font-medium text-slate-900">
                           {item.item_name ?? item.item_code}
                         </p>
@@ -114,7 +112,7 @@ export default async function StockPage() {
                           {item.item_code}
                         </span>
                       </TableCell>
-                      <TableCell className="text-xs text-slate-500">
+                      <TableCell className="hidden text-xs text-slate-500 sm:table-cell">
                         {item.items_group_name ?? "—"}
                       </TableCell>
                       <TableCell className="border-l border-slate-100 text-right font-mono text-sm text-slate-900">
@@ -158,7 +156,7 @@ export default async function StockPage() {
                       >
                         {item.total_available.toLocaleString()}
                       </TableCell>
-                      <TableCell className="text-xs text-slate-500">
+                      <TableCell className="hidden text-xs text-slate-500 sm:table-cell">
                         {item.inventory_uom ?? "—"}
                       </TableCell>
                     </TableRow>

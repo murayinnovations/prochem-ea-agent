@@ -1,5 +1,6 @@
 import { unstable_cache } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/server";
+import { fetchAllRows } from "@/lib/supabase/paginate";
 
 export interface StockSummary {
   item_code: string;
@@ -48,16 +49,15 @@ export const getCurrentStock = unstable_cache(
 
     const snapshotAt = latestRow.snapshot_at as string;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let q: any = supabase
-      .from("stock_snapshots")
-      .select("item_code, whs_code, on_hand, committed, on_order, available")
-      .eq("snapshot_at", snapshotAt);
-
-    if (filters.whs_code) q = q.eq("whs_code", filters.whs_code);
-
-    const { data } = await q;
-    const rows = (data ?? []) as Array<Record<string, unknown>>;
+    const rows = await fetchAllRows<Record<string, unknown>>("getCurrentStock", (from, to) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let q: any = supabase
+        .from("stock_snapshots")
+        .select("item_code, whs_code, on_hand, committed, on_order, available")
+        .eq("snapshot_at", snapshotAt);
+      if (filters.whs_code) q = q.eq("whs_code", filters.whs_code);
+      return q.order("id", { ascending: true }).range(from, to);
+    });
 
     const map = new Map<string, StockSummary>();
     for (const r of rows) {
@@ -105,17 +105,19 @@ export const getCurrentStock = unstable_cache(
     const codes = Array.from(map.keys());
     if (codes.length === 0) return { items: [], snapshot_at: snapshotAt };
 
-    const { data: itemData } = await supabase
-      .from("items")
-      .select("item_code, item_name, items_group_name, inventory_uom")
-      .in("item_code", codes.slice(0, 1000));
+    for (let i = 0; i < codes.length; i += 200) {
+      const { data: itemData } = await supabase
+        .from("items")
+        .select("item_code, item_name, items_group_name, inventory_uom")
+        .in("item_code", codes.slice(i, i + 200));
 
-    for (const item of itemData ?? []) {
-      const entry = map.get(item.item_code as string);
-      if (entry) {
-        entry.item_name = item.item_name as string | null;
-        entry.items_group_name = item.items_group_name as string | null;
-        entry.inventory_uom = item.inventory_uom as string | null;
+      for (const item of itemData ?? []) {
+        const entry = map.get(item.item_code as string);
+        if (entry) {
+          entry.item_name = item.item_name as string | null;
+          entry.items_group_name = item.items_group_name as string | null;
+          entry.inventory_uom = item.inventory_uom as string | null;
+        }
       }
     }
 
@@ -144,14 +146,18 @@ export const getStockTrend = unstable_cache(
     const since = new Date();
     since.setDate(since.getDate() - days);
 
-    const { data } = await supabase
-      .from("stock_snapshots")
-      .select("snapshot_at, on_hand, available")
-      .eq("item_code", item_code)
-      .gte("snapshot_at", since.toISOString())
-      .order("snapshot_at", { ascending: true });
+    const rows = await fetchAllRows<{ snapshot_at: string; on_hand: number; available: number }>("getStockTrend", (from, to) =>
+      supabase
+        .from("stock_snapshots")
+        .select("snapshot_at, on_hand, available")
+        .eq("item_code", item_code)
+        .gte("snapshot_at", since.toISOString())
+        .order("snapshot_at", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to),
+    );
 
-    return (data ?? []).map((r) => ({
+    return rows.map((r) => ({
       snapshot_at: r.snapshot_at as string,
       on_hand: Number(r.on_hand ?? 0),
       available: Number(r.available ?? 0),
@@ -183,14 +189,18 @@ export const getStockWarehouses = unstable_cache(
 
     if (!latestRow) return [];
 
-    const { data } = await supabase
-      .from("stock_snapshots")
-      .select("whs_code")
-      .eq("snapshot_at", latestRow.snapshot_at as string)
-      .not("whs_code", "is", null);
+    const rows = await fetchAllRows<{ whs_code: string | null }>("getStockWarehouses", (from, to) =>
+      supabase
+        .from("stock_snapshots")
+        .select("whs_code")
+        .eq("snapshot_at", latestRow.snapshot_at as string)
+        .not("whs_code", "is", null)
+        .order("id", { ascending: true })
+        .range(from, to),
+    );
 
     const set = new Set<string>();
-    for (const r of data ?? []) if (r.whs_code) set.add(r.whs_code as string);
+    for (const r of rows) if (r.whs_code) set.add(r.whs_code);
     return Array.from(set).sort();
   },
   ["stock-warehouses"],

@@ -11,6 +11,10 @@ export interface ColumnDef<T> {
   cell: (row: T, index: number) => ReactNode;
   align?: "left" | "right" | "center";
   width?: string;
+  // Role in the stacked card layout used below md. Defaults to a labelled
+  // field; "title" leads the card (first column if none set), "badge" sits
+  // top-right, "hidden" is dropped on small screens.
+  mobile?: "title" | "badge" | "hidden";
 }
 
 interface DataTableProps<T> {
@@ -42,9 +46,45 @@ export function DataTable<T>({
     center: "text-center",
   };
 
+  const titleCol = columns.find((c) => c.mobile === "title") ?? columns[0];
+  const badgeCol = columns.find((c) => c.mobile === "badge");
+  const fieldCols = columns.filter((c) => c !== titleCol && c !== badgeCol && c.mobile !== "hidden");
+
   return (
     <div className={cn("overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm", className)}>
-      <div className="overflow-x-auto">
+      {/* Stacked cards on phones — wide tables are unreadable at 390px */}
+      <div className="divide-y divide-slate-100 md:hidden">
+        {rows.length === 0
+          ? (emptyState ?? (
+              <div className="py-16 text-center text-sm text-slate-400">No results found</div>
+            ))
+          : rows.map((row, i) => (
+              <div
+                key={getRowKey(row)}
+                className={cn("px-4 py-3", onRowClick && "cursor-pointer active:bg-slate-50")}
+                onClick={() => onRowClick?.(row)}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 text-sm">{titleCol.cell(row, i)}</div>
+                  {badgeCol && <div className="shrink-0">{badgeCol.cell(row, i)}</div>}
+                </div>
+                {fieldCols.length > 0 && (
+                  <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2">
+                    {fieldCols.map((col) => (
+                      <div key={col.key} className="min-w-0">
+                        <dt className="text-[10px] font-medium uppercase tracking-wider text-slate-400">
+                          {col.header}
+                        </dt>
+                        <dd className="mt-0.5 truncate text-sm text-slate-700">{col.cell(row, i)}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                )}
+              </div>
+            ))}
+      </div>
+
+      <div className="hidden overflow-x-auto md:block">
         <table className="w-full text-sm">
           <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-medium uppercase tracking-wider text-slate-500">
             <tr>

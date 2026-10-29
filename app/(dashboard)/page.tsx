@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { format, subDays } from "date-fns";
+import { differenceInCalendarDays, format, parseISO, subDays } from "date-fns";
 import { TrendingUp, Receipt, Users, Clock } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -19,6 +19,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { createServerClient } from "@/lib/supabase/server";
+import { fetchAllRows } from "@/lib/supabase/paginate";
 import { formatKES, formatKESFull, formatDate } from "@/lib/formatters";
 import { RevenueAreaChart } from "@/components/charts/revenue-area-chart";
 import { TopCustomersChart } from "@/components/charts/top-customers-chart";
@@ -50,9 +51,9 @@ function HeroAndKpiSkeleton() {
   return (
     <div className="space-y-4">
       <HeroSkeleton />
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div key={i} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <Skeleton className="h-2.5 w-28" />
             <Skeleton className="mt-3 h-8 w-36" />
             <Skeleton className="mt-2 h-2.5 w-20" />
@@ -90,17 +91,17 @@ function MetricCard({
   icon: LucideIcon;
 }) {
   return (
-    <div className="flex items-start justify-between rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="flex items-start justify-between rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
       <div className="min-w-0 flex-1">
         <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
           {label}
         </p>
-        <p className="mt-2 text-2xl font-bold tracking-tight text-slate-900">
+        <p className="mt-2 whitespace-nowrap text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
           {value}
         </p>
         <p className="mt-0.5 text-xs text-slate-400">{sublabel}</p>
       </div>
-      <div className="ml-4 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-50">
+      <div className="ml-4 hidden h-9 w-9 shrink-0 items-center sm:flex justify-center rounded-lg bg-amber-50">
         <Icon className="h-4 w-4 text-amber-500" />
       </div>
     </div>
@@ -114,31 +115,30 @@ async function HeroAndKpiSection() {
   const { d30 } = cutoffs();
   const todayStr = format(new Date(), "yyyy-MM-dd");
 
-  const [revResult, cntResult, codesResult, custResult, arCntResult] =
+  const [invRows, cntResult, custResult, arCntResult] =
     await Promise.all([
-      supabase
-        .from("invoices")
-        .select("doc_total, vat_sum")
-        .gte("doc_date", d30)
-        .lte("doc_date", todayStr)
-        .eq("cancelled", false),
+      fetchAllRows<{ card_code: string; doc_total: number; vat_sum: number }>("overview revenue", (from, to) =>
+        supabase
+          .from("invoices")
+          .select("card_code, doc_total, vat_sum")
+          .gte("doc_date", d30)
+          .lte("doc_date", todayStr)
+          .eq("cancelled", false)
+          .order("doc_entry", { ascending: true })
+          .range(from, to),
+      ),
       supabase
         .from("invoices")
         .select("*", { count: "exact", head: true })
         .gte("doc_date", d30)
         .lte("doc_date", todayStr)
         .eq("cancelled", false),
-      supabase
-        .from("invoices")
-        .select("card_code")
-        .gte("doc_date", d30)
-        .lte("doc_date", todayStr)
-        .eq("cancelled", false),
+      // All customers, not just valid ones — invoiced customers can include
+      // since-deactivated accounts, which made "active of total" exceed 100%.
       supabase
         .from("customers")
         .select("*", { count: "exact", head: true })
-        .eq("card_type", "C")
-        .eq("valid", true),
+        .eq("card_type", "C"),
       supabase
         .from("invoices")
         .select("*", { count: "exact", head: true })
@@ -155,20 +155,19 @@ async function HeroAndKpiSection() {
       .eq("card_type", "C")
       .eq("valid", true)
       .gt("balance", 0)
+      .order("card_code", { ascending: true })
       .range(page * 1000, (page + 1) * 1000 - 1);
     const balRows = balPage ?? [];
     for (const r of balRows) arTotal += Number(r.balance ?? 0);
     if (balRows.length < 1000) break;
   }
 
-  const revenue30d = (revResult.data ?? []).reduce(
+  const revenue30d = invRows.reduce(
     (s, r) => s + Number(r.doc_total ?? 0) - Number(r.vat_sum ?? 0),
     0,
   );
   const invoiceCount = cntResult.count ?? 0;
-  const activeCustomers = new Set(
-    (codesResult.data ?? []).map((r) => r.card_code),
-  ).size;
+  const activeCustomers = new Set(invRows.map((r) => r.card_code)).size;
   const totalCustomers = custResult.count ?? 0;
   const arCount = arCntResult.count ?? 0;
 
@@ -183,7 +182,7 @@ async function HeroAndKpiSection() {
 
   const latestDate = latestInv?.doc_date as string | null;
   const daysDiff = latestDate
-    ? Math.floor((Date.now() - new Date(latestDate).getTime()) / 86_400_000)
+    ? differenceInCalendarDays(new Date(), parseISO(latestDate))
     : null;
   const freshnessLabel =
     daysDiff === null
@@ -245,7 +244,7 @@ async function HeroAndKpiSection() {
       </div>
 
       {/* ── KPI cards ─────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <MetricCard
           label="Revenue (30d)"
           value={formatKES(revenue30d)}
@@ -281,15 +280,19 @@ async function RevenueTrendSection() {
   const supabase = await createServerClient();
   const { d90 } = cutoffs();
 
-  const { data: rows } = await supabase
-    .from("invoices")
-    .select("doc_date, doc_total, vat_sum")
-    .gte("doc_date", d90)
-    .eq("cancelled", false)
-    .order("doc_date", { ascending: true });
+  const rows = await fetchAllRows<{ doc_date: string; doc_total: number; vat_sum: number }>("revenue trend", (from, to) =>
+    supabase
+      .from("invoices")
+      .select("doc_date, doc_total, vat_sum")
+      .gte("doc_date", d90)
+      .eq("cancelled", false)
+      .order("doc_date", { ascending: true })
+      .order("doc_entry", { ascending: true })
+      .range(from, to),
+  );
 
   const byDate = new Map<string, number>();
-  for (const r of rows ?? []) {
+  for (const r of rows) {
     const d = r.doc_date as string;
     byDate.set(d, (byDate.get(d) ?? 0) + Number(r.doc_total ?? 0) - Number(r.vat_sum ?? 0));
   }
@@ -349,10 +352,10 @@ async function RecentInvoicesSection() {
         <Table>
           <TableHeader>
             <TableRow className="border-slate-200 bg-slate-50 hover:bg-slate-50">
-              <TableHead className="text-xs font-semibold text-slate-500">
+              <TableHead className="hidden text-xs font-semibold text-slate-500 sm:table-cell">
                 Doc #
               </TableHead>
-              <TableHead className="text-xs font-semibold text-slate-500">
+              <TableHead className="hidden text-xs font-semibold text-slate-500 sm:table-cell">
                 Date
               </TableHead>
               <TableHead className="text-xs font-semibold text-slate-500">
@@ -382,17 +385,18 @@ async function RecentInvoicesSection() {
                   key={inv.doc_num ?? `r${i}`}
                   className="border-slate-100 hover:bg-slate-50"
                 >
-                  <TableCell className="font-mono text-sm text-slate-700">
+                  <TableCell className="hidden font-mono text-sm text-slate-700 sm:table-cell">
                     {inv.doc_num ?? "—"}
                   </TableCell>
-                  <TableCell className="text-sm text-slate-500">
+                  <TableCell className="hidden text-sm text-slate-500 sm:table-cell">
                     {formatDate(inv.doc_date as string)}
                   </TableCell>
                   <TableCell className="max-w-[160px] truncate text-sm font-medium text-slate-900">
                     {nameMap[inv.card_code] ?? inv.card_code}
                   </TableCell>
                   <TableCell className="text-right font-mono text-sm text-slate-900">
-                    {formatKESFull(Number(inv.doc_total ?? 0))}
+                    <span className="sm:hidden">{formatKES(Number(inv.doc_total ?? 0))}</span>
+                    <span className="hidden sm:inline">{formatKESFull(Number(inv.doc_total ?? 0))}</span>
                   </TableCell>
                   <TableCell>
                     <Badge
@@ -427,14 +431,18 @@ async function TopCustomersSection() {
   const supabase = await createServerClient();
   const { d30 } = cutoffs();
 
-  const { data: rows } = await supabase
-    .from("invoices")
-    .select("card_code, doc_total, vat_sum")
-    .gte("doc_date", d30)
-    .eq("cancelled", false);
+  const rows = await fetchAllRows<{ card_code: string; doc_total: number; vat_sum: number }>("top customers", (from, to) =>
+    supabase
+      .from("invoices")
+      .select("card_code, doc_total, vat_sum")
+      .gte("doc_date", d30)
+      .eq("cancelled", false)
+      .order("doc_entry", { ascending: true })
+      .range(from, to),
+  );
 
   const totals = new Map<string, number>();
-  for (const r of rows ?? []) {
+  for (const r of rows) {
     totals.set(
       r.card_code,
       (totals.get(r.card_code) ?? 0) +
@@ -488,14 +496,16 @@ async function SalesEmployeeSection() {
   const { d30 } = cutoffs();
   const todayStr = format(new Date(), "yyyy-MM-dd");
 
-  const { data } = await supabase
-    .from("invoices")
-    .select("slp_name, doc_total, vat_sum")
-    .gte("doc_date", d30)
-    .lte("doc_date", todayStr)
-    .eq("cancelled", false);
-
-  const rows = data ?? [];
+  const rows = await fetchAllRows<{ slp_name: string | null; doc_total: number; vat_sum: number }>("sales employee", (from, to) =>
+    supabase
+      .from("invoices")
+      .select("slp_name, doc_total, vat_sum")
+      .gte("doc_date", d30)
+      .lte("doc_date", todayStr)
+      .eq("cancelled", false)
+      .order("doc_entry", { ascending: true })
+      .range(from, to),
+  );
   const hasData = rows.some((r) => r.slp_name != null);
 
   if (!hasData) {

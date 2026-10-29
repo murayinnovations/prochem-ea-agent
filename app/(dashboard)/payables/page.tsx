@@ -44,7 +44,7 @@ export default async function PayablesPage() {
       <PageHeader title="Payables" subtitle="Suppliers · A/P Invoices · Purchase Orders" />
 
       {/* KPI strip */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
         <KpiStat
           label="Total Payables (balance)"
           value={formatKES(supplierKpis.totalPayables)}
@@ -82,10 +82,10 @@ export default async function PayablesPage() {
               <TableHeader>
                 <TableRow className="border-slate-200 bg-slate-50 hover:bg-slate-50">
                   <TableHead className="text-xs font-semibold text-slate-600">Supplier</TableHead>
-                  <TableHead className="text-xs font-semibold text-slate-600">Country</TableHead>
-                  <TableHead className="text-xs font-semibold text-slate-600">Currency</TableHead>
+                  <TableHead className="hidden text-xs font-semibold text-slate-600 sm:table-cell">Country</TableHead>
+                  <TableHead className="hidden text-xs font-semibold text-slate-600 sm:table-cell">Currency</TableHead>
                   <TableHead className="text-right text-xs font-semibold text-slate-600">Balance</TableHead>
-                  <TableHead className="text-xs font-semibold text-slate-600">Status</TableHead>
+                  <TableHead className="hidden text-xs font-semibold text-slate-600 sm:table-cell">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -95,12 +95,12 @@ export default async function PayablesPage() {
                       <p className="font-medium text-slate-900">{s.card_name ?? s.card_code}</p>
                       <span className="font-mono text-[10px] text-slate-400">{s.card_code}</span>
                     </TableCell>
-                    <TableCell className="text-sm text-slate-500">{s.country ?? "—"}</TableCell>
-                    <TableCell className="text-sm text-slate-500">{s.currency ?? "KES"}</TableCell>
+                    <TableCell className="hidden text-sm text-slate-500 sm:table-cell">{s.country ?? "—"}</TableCell>
+                    <TableCell className="hidden text-sm text-slate-500 sm:table-cell">{s.currency ?? "KES"}</TableCell>
                     <TableCell className="text-right font-mono text-sm font-semibold text-slate-900">
                       {formatKES(s.balance)}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="hidden sm:table-cell">
                       <span
                         className={
                           "inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium " +
@@ -134,32 +134,32 @@ export default async function PayablesPage() {
             <Table>
               <TableHeader>
                 <TableRow className="border-slate-200 bg-slate-50 hover:bg-slate-50">
-                  <TableHead className="text-xs font-semibold text-slate-600">Doc #</TableHead>
+                  <TableHead className="hidden text-xs font-semibold text-slate-600 sm:table-cell">Doc #</TableHead>
                   <TableHead className="text-xs font-semibold text-slate-600">Supplier</TableHead>
-                  <TableHead className="text-xs font-semibold text-slate-600">Date</TableHead>
+                  <TableHead className="hidden text-xs font-semibold text-slate-600 sm:table-cell">Date</TableHead>
                   <TableHead className="text-xs font-semibold text-slate-600">Due</TableHead>
-                  <TableHead className="text-right text-xs font-semibold text-slate-600">Total</TableHead>
-                  <TableHead className="text-right text-xs font-semibold text-slate-600">Paid</TableHead>
+                  <TableHead className="hidden text-right text-xs font-semibold text-slate-600 sm:table-cell">Total</TableHead>
+                  <TableHead className="hidden text-right text-xs font-semibold text-slate-600 sm:table-cell">Paid</TableHead>
                   <TableHead className="text-right text-xs font-semibold text-slate-600">Outstanding</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {apInvoices.map((inv) => (
                   <TableRow key={inv.doc_entry} className="border-slate-100 hover:bg-slate-50">
-                    <TableCell className="font-mono text-sm text-slate-700">
+                    <TableCell className="hidden font-mono text-sm text-slate-700 sm:table-cell">
                       {inv.doc_num ?? inv.doc_entry}
                     </TableCell>
                     <TableCell className="text-sm text-slate-900">{inv.card_code}</TableCell>
-                    <TableCell className="text-sm text-slate-500">
+                    <TableCell className="hidden text-sm text-slate-500 sm:table-cell">
                       {formatDate(inv.doc_date)}
                     </TableCell>
                     <TableCell className="text-sm text-slate-500">
                       {inv.doc_due_date ? formatDate(inv.doc_due_date) : "—"}
                     </TableCell>
-                    <TableCell className="text-right font-mono text-sm text-slate-900">
+                    <TableCell className="hidden text-right font-mono text-sm text-slate-900 sm:table-cell">
                       {formatKES(inv.doc_total)}
                     </TableCell>
-                    <TableCell className="text-right font-mono text-sm text-slate-500">
+                    <TableCell className="hidden text-right font-mono text-sm text-slate-500 sm:table-cell">
                       {formatKES(inv.paid_to_date)}
                     </TableCell>
                     <TableCell className="text-right font-mono text-sm font-semibold text-amber-700">
@@ -187,9 +187,9 @@ export default async function PayablesPage() {
             <Table>
               <TableHeader>
                 <TableRow className="border-slate-200 bg-slate-50 hover:bg-slate-50">
-                  <TableHead className="text-xs font-semibold text-slate-600">PO #</TableHead>
+                  <TableHead className="hidden text-xs font-semibold text-slate-600 sm:table-cell">PO #</TableHead>
                   <TableHead className="text-xs font-semibold text-slate-600">Supplier</TableHead>
-                  <TableHead className="text-xs font-semibold text-slate-600">Date</TableHead>
+                  <TableHead className="hidden text-xs font-semibold text-slate-600 sm:table-cell">Date</TableHead>
                   <TableHead className="text-xs font-semibold text-slate-600">Due</TableHead>
                   <TableHead className="text-right text-xs font-semibold text-slate-600">
                     PO Value
@@ -199,11 +199,11 @@ export default async function PayablesPage() {
               <TableBody>
                 {purchaseOrders.map((po) => (
                   <TableRow key={po.doc_entry} className="border-slate-100 hover:bg-slate-50">
-                    <TableCell className="font-mono text-sm text-slate-700">
+                    <TableCell className="hidden font-mono text-sm text-slate-700 sm:table-cell">
                       {po.doc_num ?? po.doc_entry}
                     </TableCell>
                     <TableCell className="text-sm text-slate-900">{po.card_code}</TableCell>
-                    <TableCell className="text-sm text-slate-500">
+                    <TableCell className="hidden text-sm text-slate-500 sm:table-cell">
                       {formatDate(po.doc_date)}
                     </TableCell>
                     <TableCell className="text-sm text-slate-500">

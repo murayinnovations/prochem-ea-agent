@@ -1,6 +1,7 @@
 import { unstable_cache } from "next/cache";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/server";
+import { fetchAllRows } from "@/lib/supabase/paginate";
 
 // ── Input schema ──────────────────────────────────────────────────────────────
 
@@ -75,19 +76,19 @@ export const listInvoices = unstable_cache(
     const supabase = createAdminClient();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let q: any = supabase
-      .from("invoices")
-      .select("doc_entry, doc_num, doc_date, doc_due_date, card_code, doc_currency, doc_total, paid_to_date_sys, doc_status")
-      .eq("cancelled", false);
+    const rows = await fetchAllRows<any>("listInvoices", (from, to) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let q: any = supabase
+        .from("invoices")
+        .select("doc_entry, doc_num, doc_date, doc_due_date, card_code, doc_currency, doc_total, paid_to_date_sys, doc_status")
+        .eq("cancelled", false);
 
-    if (f.dateFrom) q = q.gte("doc_date", f.dateFrom);
-    if (f.dateTo)   q = q.lte("doc_date", f.dateTo);
-    if (f.status !== "all") q = q.eq("doc_status", f.status);
+      if (f.dateFrom) q = q.gte("doc_date", f.dateFrom);
+      if (f.dateTo)   q = q.lte("doc_date", f.dateTo);
+      if (f.status !== "all") q = q.eq("doc_status", f.status);
 
-    const { data: invData, error } = await q;
-    if (error) throw new Error(`listInvoices: ${error.message}`);
-
-    const rows = invData ?? [];
+      return q.order("doc_entry", { ascending: true }).range(from, to);
+    });
 
     // Resolve customer names (two-step, no FK join)
     const codes = [...new Set(rows.map((r: { card_code: string }) => r.card_code))];
@@ -104,7 +105,6 @@ export const listInvoices = unstable_cache(
 
     const now = new Date();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     type EnrichedRow = (typeof rows)[number] & { card_name: string | null; outstanding: number; age_days: number | null };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

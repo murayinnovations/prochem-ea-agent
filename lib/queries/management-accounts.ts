@@ -1,5 +1,6 @@
 import { unstable_cache } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/server";
+import { fetchAllRows } from "@/lib/supabase/paginate";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const MANAGEMENT_ACCOUNTS_LIST_TAG = "management-accounts-uploads";
@@ -36,32 +37,37 @@ export const listManagementAccountsUploads = unstable_cache(
 
     const uploadIds = rows.map((r) => r.id as string);
 
-    const [{ data: revenueRows }, { data: arRows }, { data: stockRows }] = await Promise.all([
-      db
-        .from("pnl_lines")
-        .select("upload_id, month, amount")
-        .ilike("account_name", "%gross turnover%")
-        .in("upload_id", uploadIds),
-      db.from("aged_debtors_snapshots").select("upload_id, total_kes").in("upload_id", uploadIds),
-      db.from("mgmt_stock_snapshots").select("upload_id, cumulative_value").in("upload_id", uploadIds),
+    // Side tables hold many rows per upload, so totals across all uploads are paged.
+    const [revenueRows, arRows, stockRows] = await Promise.all([
+      fetchAllRows<Record<string, unknown>>("uploads revenue", (from, to) =>
+        db
+          .from("pnl_lines")
+          .select("upload_id, month, amount")
+          .ilike("account_name", "%gross turnover%")
+          .in("upload_id", uploadIds)
+          .order("id", { ascending: true })
+          .range(from, to),
+      ),
+      fetchAllForUploads<Record<string, unknown>>(db, "aged_debtors_snapshots", "upload_id, total_kes", uploadIds),
+      fetchAllForUploads<Record<string, unknown>>(db, "mgmt_stock_snapshots", "upload_id, cumulative_value", uploadIds),
     ]);
 
     // Revenue is the single month matching each upload's own period (not a sum
     // across the workbook's full Jan–Dec columns) — keyed by upload_id:month.
     const revenueByKey = new Map<string, number>();
-    for (const r of (revenueRows ?? []) as Array<Record<string, unknown>>) {
+    for (const r of revenueRows) {
       const key = `${r.upload_id}:${r.month}`;
       revenueByKey.set(key, (revenueByKey.get(key) ?? 0) + Number(r.amount ?? 0));
     }
 
     const arByUpload = new Map<string, number>();
-    for (const r of (arRows ?? []) as Array<Record<string, unknown>>) {
+    for (const r of arRows) {
       const id = r.upload_id as string;
       arByUpload.set(id, (arByUpload.get(id) ?? 0) + Number(r.total_kes ?? 0));
     }
 
     const stockByUpload = new Map<string, number>();
-    for (const r of (stockRows ?? []) as Array<Record<string, unknown>>) {
+    for (const r of stockRows) {
       const id = r.upload_id as string;
       stockByUpload.set(id, (stockByUpload.get(id) ?? 0) + Number(r.cumulative_value ?? 0));
     }
@@ -349,7 +355,7 @@ async function fetchAllForUploads<T>(
   const out: T[] = [];
   for (let page = 0; page < 100; page++) {
     const from = page * 1000;
-    const { data, error } = await db.from(table).select(columns).in("upload_id", uploadIds).range(from, from + 999);
+    const { data, error } = await db.from(table).select(columns).in("upload_id", uploadIds).order("id", { ascending: true }).range(from, from + 999);
     if (error) throw new Error(`fetchAllForUploads(${table}): ${error.message}`);
     const rows = (data ?? []) as T[];
     out.push(...rows);

@@ -1,5 +1,6 @@
 import { unstable_cache } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/server";
+import { fetchAllRows } from "@/lib/supabase/paginate";
 
 export interface ARAging {
   b0_30: number;
@@ -45,18 +46,25 @@ export const arAgingBuckets = unstable_cache(
         .eq("card_type", "C")
         .eq("valid", true)
         .gt("balance", 0)
+        .order("card_code", { ascending: true })
         .range(page * 1000, (page + 1) * 1000 - 1);
       const balRows = balPage ?? [];
       for (const r of balRows) total += Number(r.balance ?? 0);
       if (balRows.length < 1000) break;
     }
 
-    const [invResult, cntResult] = await Promise.all([
-      supabase
-        .from("invoices")
-        .select("doc_total, paid_to_date_sys, doc_due_date, doc_date")
-        .eq("doc_status", "O")
-        .eq("cancelled", false),
+    const [openRows, cntResult] = await Promise.all([
+      fetchAllRows<{ doc_total: number; paid_to_date_sys: number; doc_due_date: string | null; doc_date: string }>(
+        "arAgingBuckets",
+        (from, to) =>
+          supabase
+            .from("invoices")
+            .select("doc_total, paid_to_date_sys, doc_due_date, doc_date")
+            .eq("doc_status", "O")
+            .eq("cancelled", false)
+            .order("doc_entry", { ascending: true })
+            .range(from, to),
+      ),
       supabase
         .from("invoices")
         .select("*", { count: "exact", head: true })
@@ -74,7 +82,7 @@ export const arAgingBuckets = unstable_cache(
       open_count: cntResult.count ?? 0,
     };
 
-    for (const r of invResult.data ?? []) {
+    for (const r of openRows) {
       const outstanding = Math.max(0, Number(r.doc_total ?? 0) - Number(r.paid_to_date_sys ?? 0));
       if (outstanding <= 0) continue;
       const dueDate = r.doc_due_date
@@ -107,15 +115,21 @@ export const getSalesEmployeeRollup = unstable_cache(
   async (period: { start: string; end: string }): Promise<SalesEmployeeRow[]> => {
     const supabase = createAdminClient();
 
-    const { data } = await supabase
-      .from("invoices")
-      .select("slp_name, doc_total, vat_sum, paid_to_date_sys")
-      .gte("doc_date", period.start)
-      .lte("doc_date", period.end)
-      .eq("cancelled", false);
+    const rows = await fetchAllRows<{ slp_name: string | null; doc_total: number; vat_sum: number; paid_to_date_sys: number }>(
+      "getSalesEmployeeRollup",
+      (from, to) =>
+        supabase
+          .from("invoices")
+          .select("slp_name, doc_total, vat_sum, paid_to_date_sys")
+          .gte("doc_date", period.start)
+          .lte("doc_date", period.end)
+          .eq("cancelled", false)
+          .order("doc_entry", { ascending: true })
+          .range(from, to),
+    );
 
     const map = new Map<string, { rev: number; cnt: number; paid: number }>();
-    for (const r of data ?? []) {
+    for (const r of rows) {
       const name = (r.slp_name as string | null) ?? "(unassigned)";
       const prev = map.get(name) ?? { rev: 0, cnt: 0, paid: 0 };
       map.set(name, {
@@ -145,14 +159,18 @@ export const revenueByPeriod = unstable_cache(
   async (start: string, end: string): Promise<PeriodRevenue> => {
     const supabase = createAdminClient();
 
-    const { data } = await supabase
-      .from("invoices")
-      .select("doc_total, vat_sum, card_code")
-      .gte("doc_date", start)
-      .lte("doc_date", end)
-      .eq("cancelled", false);
-
-    const rows = data ?? [];
+    const rows = await fetchAllRows<{ doc_total: number; vat_sum: number; card_code: string }>(
+      "revenueByPeriod",
+      (from, to) =>
+        supabase
+          .from("invoices")
+          .select("doc_total, vat_sum, card_code")
+          .gte("doc_date", start)
+          .lte("doc_date", end)
+          .eq("cancelled", false)
+          .order("doc_entry", { ascending: true })
+          .range(from, to),
+    );
     return {
       total_revenue: rows.reduce((s, r) => s + Number(r.doc_total ?? 0) - Number(r.vat_sum ?? 0), 0),
       invoice_count: rows.length,

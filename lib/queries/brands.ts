@@ -8,6 +8,7 @@ import { unstable_cache } from "next/cache";
 import { z } from "zod";
 import { format, subDays, subMonths } from "date-fns";
 import { createAdminClient } from "@/lib/supabase/server";
+import { fetchAllRows } from "@/lib/supabase/paginate";
 
 // ── Input schemas ─────────────────────────────────────────────────────────────
 
@@ -90,27 +91,30 @@ export const listSkus = unstable_cache(
 
     const d30 = format(subDays(today(), 30), "yyyy-MM-dd");
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let itemQ: any = supabase.from("items").select("item_code, item_name, items_group_name, inventory_uom, valid");
-    if (f.search) itemQ = itemQ.or(`item_name.ilike.%${f.search}%,item_code.ilike.%${f.search}%`);
-    if (f.group) itemQ = itemQ.eq("items_group_name", f.group);
-
-    const { data: itemData, error } = await itemQ;
-    if (error) throw new Error(`listSkus: ${error.message}`);
-
-    const items = itemData ?? [];
+    const items = await fetchAllRows<Record<string, unknown>>("listSkus", (from, to) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let itemQ: any = supabase.from("items").select("item_code, item_name, items_group_name, inventory_uom, valid");
+      if (f.search) itemQ = itemQ.or(`item_name.ilike.%${f.search}%,item_code.ilike.%${f.search}%`);
+      if (f.group) itemQ = itemQ.eq("items_group_name", f.group);
+      return itemQ.order("item_code", { ascending: true }).range(from, to);
+    });
     if (items.length === 0) return { rows: [] as SkuRow[], total: 0 };
 
-    const itemCodes = items.map((i: { item_code: string }) => i.item_code);
+    const itemCodes = items.map((i) => i.item_code as string);
 
     const lineRows: { item_code: string; line_total: number; quantity: number }[] = [];
     for (let i = 0; i < itemCodes.length; i += 200) {
-      const { data } = await supabase
-        .from("invoice_lines")
-        .select("item_code, line_total, quantity")
-        .in("item_code", itemCodes.slice(i, i + 200))
-        .gte("doc_date", d30);
-      for (const r of data ?? []) {
+      const data = await fetchAllRows<{ item_code: string; line_total: number; quantity: number }>("listSkus lines", (from, to) =>
+        supabase
+          .from("invoice_lines")
+          .select("item_code, line_total, quantity")
+          .in("item_code", itemCodes.slice(i, i + 200))
+          .gte("doc_date", d30)
+          .order("doc_entry", { ascending: true })
+          .order("line_num", { ascending: true })
+          .range(from, to),
+      );
+      for (const r of data) {
         lineRows.push({ item_code: r.item_code as string, line_total: Number(r.line_total ?? 0), quantity: Number(r.quantity ?? 0) });
       }
     }
@@ -125,7 +129,7 @@ export const listSkus = unstable_cache(
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let rows: SkuRow[] = (items as any[]).map((it) => {
+    const rows: SkuRow[] = (items as any[]).map((it) => {
       const rev = rev30.get(it.item_code) ?? 0;
       const vol = vol30.get(it.item_code) ?? 0;
       const cnt = cnt30.get(it.item_code) ?? 0;
@@ -165,12 +169,17 @@ export const getItemGroupRollup = unstable_cache(
     const supabase = createAdminClient();
     const start = format(subDays(today(), days), "yyyy-MM-dd");
 
-    const { data: lines } = await supabase
-      .from("invoice_lines")
-      .select("item_code, line_total, quantity")
-      .gte("doc_date", start);
+    const lines = await fetchAllRows<{ item_code: string; line_total: number; quantity: number }>("getItemGroupRollup", (from, to) =>
+      supabase
+        .from("invoice_lines")
+        .select("item_code, line_total, quantity")
+        .gte("doc_date", start)
+        .order("doc_entry", { ascending: true })
+        .order("line_num", { ascending: true })
+        .range(from, to),
+    );
 
-    if (!lines || lines.length === 0) return [];
+    if (lines.length === 0) return [];
 
     const itemCodes = [...new Set(lines.map((l) => l.item_code as string))];
     const groupMap = new Map<string, string>();
@@ -220,13 +229,16 @@ export const getSkuDetail = unstable_cache(
 
     if (!item) return null;
 
-    const { data: lines } = await supabase
-      .from("invoice_lines")
-      .select("doc_entry, line_total, quantity, doc_date")
-      .eq("item_code", item_code)
-      .gte("doc_date", d12mo);
-
-    const allLines = lines ?? [];
+    const allLines = await fetchAllRows<{ doc_entry: number; line_total: number; quantity: number; doc_date: string }>("getSkuDetail", (from, to) =>
+      supabase
+        .from("invoice_lines")
+        .select("doc_entry, line_total, quantity, doc_date")
+        .eq("item_code", item_code)
+        .gte("doc_date", d12mo)
+        .order("doc_entry", { ascending: true })
+        .order("line_num", { ascending: true })
+        .range(from, to),
+    );
 
     const docEntries = [...new Set(allLines.map((l) => l.doc_entry as number))];
     const cardCodeMap = new Map<number, string>();
@@ -242,11 +254,11 @@ export const getSkuDetail = unstable_cache(
 
     const cardCodes = [...new Set(Array.from(cardCodeMap.values()))];
     const nameMap = new Map<string, string | null>();
-    if (cardCodes.length > 0) {
+    for (let i = 0; i < cardCodes.length; i += 200) {
       const { data: custs } = await supabase
         .from("customers")
         .select("card_code, card_name")
-        .in("card_code", cardCodes);
+        .in("card_code", cardCodes.slice(i, i + 200));
       for (const c of custs ?? []) nameMap.set(c.card_code as string, c.card_name as string | null);
     }
 
@@ -328,29 +340,39 @@ export const getFastMovingSkus = unstable_cache(
     const dCurrent = format(subDays(now, days), "yyyy-MM-dd");
     const dPrior = format(subDays(now, days * 2), "yyyy-MM-dd");
 
-    const [currRes, priorRes] = await Promise.all([
-      supabase
-        .from("invoice_lines")
-        .select("item_code, quantity, line_total")
-        .gte("doc_date", dCurrent)
-        .lte("doc_date", dNow),
-      supabase
-        .from("invoice_lines")
-        .select("item_code, quantity")
-        .gte("doc_date", dPrior)
-        .lt("doc_date", dCurrent),
+    const [currRows, priorRows] = await Promise.all([
+      fetchAllRows<{ item_code: string; quantity: number; line_total: number }>("getFastMovingSkus current", (from, to) =>
+        supabase
+          .from("invoice_lines")
+          .select("item_code, quantity, line_total")
+          .gte("doc_date", dCurrent)
+          .lte("doc_date", dNow)
+          .order("doc_entry", { ascending: true })
+          .order("line_num", { ascending: true })
+          .range(from, to),
+      ),
+      fetchAllRows<{ item_code: string; quantity: number }>("getFastMovingSkus prior", (from, to) =>
+        supabase
+          .from("invoice_lines")
+          .select("item_code, quantity")
+          .gte("doc_date", dPrior)
+          .lt("doc_date", dCurrent)
+          .order("doc_entry", { ascending: true })
+          .order("line_num", { ascending: true })
+          .range(from, to),
+      ),
     ]);
 
     const currVol = new Map<string, number>();
     const currRev = new Map<string, number>();
-    for (const r of currRes.data ?? []) {
+    for (const r of currRows) {
       const code = r.item_code as string;
       currVol.set(code, (currVol.get(code) ?? 0) + Number(r.quantity ?? 0));
       currRev.set(code, (currRev.get(code) ?? 0) + Number(r.line_total ?? 0));
     }
 
     const priorVol = new Map<string, number>();
-    for (const r of priorRes.data ?? []) {
+    for (const r of priorRows) {
       const code = r.item_code as string;
       priorVol.set(code, (priorVol.get(code) ?? 0) + Number(r.quantity ?? 0));
     }
@@ -425,14 +447,19 @@ export const getSkuVolumeTrend = unstable_cache(
     const granularity = granularityFor(days);
     const start = format(subDays(today(), days), "yyyy-MM-dd");
 
-    const { data } = await supabase
-      .from("invoice_lines")
-      .select("doc_date, quantity, line_total")
-      .eq("item_code", item_code)
-      .gte("doc_date", start);
+    const rows = await fetchAllRows<{ doc_date: string; quantity: number; line_total: number }>("getSkuVolumeTrend", (from, to) =>
+      supabase
+        .from("invoice_lines")
+        .select("doc_date, quantity, line_total")
+        .eq("item_code", item_code)
+        .gte("doc_date", start)
+        .order("doc_entry", { ascending: true })
+        .order("line_num", { ascending: true })
+        .range(from, to),
+    );
 
     const byPeriod = new Map<string, { vol: number; rev: number }>();
-    for (const r of data ?? []) {
+    for (const r of rows) {
       const bucket = toPeriodStart(r.doc_date as string, granularity);
       const prev = byPeriod.get(bucket) ?? { vol: 0, rev: 0 };
       byPeriod.set(bucket, {
@@ -460,12 +487,16 @@ export const getSkuVolumeTrend = unstable_cache(
 export const getItemGroups = unstable_cache(
   async (): Promise<string[]> => {
     const supabase = createAdminClient();
-    const { data } = await supabase
-      .from("items")
-      .select("items_group_name")
-      .not("items_group_name", "is", null);
+    const rows = await fetchAllRows<{ items_group_name: string | null }>("getItemGroups", (from, to) =>
+      supabase
+        .from("items")
+        .select("items_group_name")
+        .not("items_group_name", "is", null)
+        .order("item_code", { ascending: true })
+        .range(from, to),
+    );
     const set = new Set<string>();
-    for (const r of data ?? []) if (r.items_group_name) set.add(r.items_group_name as string);
+    for (const r of rows) if (r.items_group_name) set.add(r.items_group_name);
     return Array.from(set).sort();
   },
   ["brands-item-groups"],

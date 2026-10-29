@@ -2,6 +2,7 @@ import { unstable_cache } from "next/cache";
 import { z } from "zod";
 import { format, subDays, subMonths, differenceInDays } from "date-fns";
 import { createAdminClient } from "@/lib/supabase/server";
+import { fetchAllRows } from "@/lib/supabase/paginate";
 
 // ── Input schemas ─────────────────────────────────────────────────────────────
 
@@ -99,35 +100,31 @@ export const getCustomersPortfolioKpis = unstable_cache(
     const supabase = createAdminClient();
     const d30 = format(subDays(new Date(), 30), "yyyy-MM-dd");
 
-    // Revenue 30d — paginated to clear PostgREST's 1000-row cap
-    let rev30Total = 0;
-    for (let page = 0; page < 200; page++) {
-      const { data } = await supabase
-        .from("invoices")
-        .select("doc_total, vat_sum")
-        .gte("doc_date", d30)
-        .eq("cancelled", false)
-        .range(page * 1000, (page + 1) * 1000 - 1);
-      const rows = data ?? [];
-      for (const r of rows)
-        rev30Total += Number(r.doc_total ?? 0) - Number(r.vat_sum ?? 0);
-      if (rows.length < 1000) break;
-    }
+    const [revRows, balRows] = await Promise.all([
+      fetchAllRows<{ doc_total: number; vat_sum: number }>("portfolio revenue", (from, to) =>
+        supabase
+          .from("invoices")
+          .select("doc_total, vat_sum")
+          .gte("doc_date", d30)
+          .eq("cancelled", false)
+          .order("doc_entry", { ascending: true })
+          .range(from, to),
+      ),
+      // AR total — fixed filters only: card_type=C, valid=true, balance>0
+      fetchAllRows<{ balance: number }>("portfolio AR", (from, to) =>
+        supabase
+          .from("customers")
+          .select("balance")
+          .eq("card_type", "C")
+          .eq("valid", true)
+          .gt("balance", 0)
+          .order("card_code", { ascending: true })
+          .range(from, to),
+      ),
+    ]);
 
-    // AR total — fixed filters only: card_type=C, valid=true, balance>0
-    let arTotal = 0;
-    for (let page = 0; page < 200; page++) {
-      const { data } = await supabase
-        .from("customers")
-        .select("balance")
-        .eq("card_type", "C")
-        .eq("valid", true)
-        .gt("balance", 0)
-        .range(page * 1000, (page + 1) * 1000 - 1);
-      const rows = data ?? [];
-      for (const r of rows) arTotal += Number(r.balance ?? 0);
-      if (rows.length < 1000) break;
-    }
+    const rev30Total = revRows.reduce((s, r) => s + Number(r.doc_total ?? 0) - Number(r.vat_sum ?? 0), 0);
+    const arTotal = balRows.reduce((s, r) => s + Number(r.balance ?? 0), 0);
 
     return { rev30Total, arTotal };
   },
@@ -176,19 +173,22 @@ export const listCustomers = unstable_cache(
           .eq("card_type", "C")
       )
         .order(orderCol, { ascending, nullsFirst: false })
+        .order("card_code", { ascending: true })
         .range(pageStart, pageStart + f.pageSize - 1);
       if (error) throw new Error(`listCustomers: ${error.message}`);
       customers = (data ?? []) as Array<Record<string, unknown>>;
     } else {
-      // JS-side sort (revenue30d, lastOrder) — fetch all (5000 cap) then sort + slice.
-      const { data, error } = await af(
-        supabase
-          .from("customers")
-          .select("card_code, card_name, country, currency, valid, sap_create_date, balance")
-          .eq("card_type", "C")
-      ).limit(5000);
-      if (error) throw new Error(`listCustomers: ${error.message}`);
-      customers = (data ?? []) as Array<Record<string, unknown>>;
+      // JS-side sort (revenue30d, lastOrder) — fetch all then sort + slice.
+      customers = await fetchAllRows<Record<string, unknown>>("listCustomers", (from, to) =>
+        af(
+          supabase
+            .from("customers")
+            .select("card_code, card_name, country, currency, valid, sap_create_date, balance")
+            .eq("card_type", "C")
+        )
+          .order("card_code", { ascending: true })
+          .range(from, to),
+      );
     }
 
     if (customers.length === 0) return { rows: [] as CustomerRow[], total };
@@ -206,11 +206,13 @@ export const listCustomers = unstable_cache(
     async function fetchInvoiceCols(select: string, extra?: (q: any) => any) {
       const allRows: Record<string, unknown>[] = [];
       for (const batch of chunk(codes, 200)) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let bq: any = supabase.from("invoices").select(select).in("card_code", batch).eq("cancelled", false);
-        if (extra) bq = extra(bq);
-        const { data } = await bq;
-        allRows.push(...(data ?? []));
+        const rows = await fetchAllRows<Record<string, unknown>>("listCustomers invoices", (from, to) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          let bq: any = supabase.from("invoices").select(select).in("card_code", batch).eq("cancelled", false);
+          if (extra) bq = extra(bq);
+          return bq.order("doc_entry", { ascending: true }).range(from, to);
+        });
+        allRows.push(...rows);
       }
       return allRows;
     }
@@ -218,7 +220,7 @@ export const listCustomers = unstable_cache(
     const [rev30Rows, rev12Rows, lastOrderRows] = await Promise.all([
       fetchInvoiceCols("card_code, doc_total, vat_sum", (q) => q.gte("doc_date", d30)),
       fetchInvoiceCols("card_code, doc_total, vat_sum", (q) => q.gte("doc_date", d12mo)),
-      fetchInvoiceCols("card_code, doc_date", (q) => q.order("doc_date", { ascending: false })),
+      fetchInvoiceCols("card_code, doc_date"),
     ]);
 
     // ── 5. Aggregate by customer code ─────────────────────────────────────────
@@ -237,7 +239,9 @@ export const listCustomers = unstable_cache(
     const lastOrderMap = new Map<string, string>();
     for (const r of lastOrderRows) {
       const cc = r.card_code as string;
-      if (!lastOrderMap.has(cc)) lastOrderMap.set(cc, r.doc_date as string);
+      const d = r.doc_date as string;
+      const prev = lastOrderMap.get(cc);
+      if (!prev || d > prev) lastOrderMap.set(cc, d);
     }
 
     // ── 6. Build rows ─────────────────────────────────────────────────────────
@@ -277,16 +281,17 @@ export const getCustomerDetail = unstable_cache(
     const supabase = createAdminClient();
     const d12mo = format(subMonths(today(), 12), "yyyy-MM-dd");
 
-    const [custResult, invResult, payResult] = await Promise.all([
+    const [custResult, inv12, payResult] = await Promise.all([
       supabase.from("customers").select("*").eq("card_code", card_code).maybeSingle(),
-      supabase.from("invoices").select("doc_total, vat_sum, doc_date").eq("card_code", card_code).eq("cancelled", false).gte("doc_date", d12mo),
+      fetchAllRows<{ doc_total: number; vat_sum: number; doc_date: string }>("getCustomerDetail", (from, to) =>
+        supabase.from("invoices").select("doc_total, vat_sum, doc_date").eq("card_code", card_code).eq("cancelled", false).gte("doc_date", d12mo)
+          .order("doc_entry", { ascending: true }).range(from, to),
+      ),
       supabase.from("payments").select("doc_date").eq("card_code", card_code).eq("cancelled", false).order("doc_date", { ascending: false }).limit(1),
     ]);
 
     const cust = custResult.data;
     if (!cust) return null;
-
-    const inv12 = invResult.data ?? [];
 
     const revenue12mo = inv12.reduce((s, r) => s + Number(r.doc_total ?? 0) - Number(r.vat_sum ?? 0), 0);
     // AR from SAP's authoritative OCRD.Balance — matches SAP UI to the cent
@@ -318,15 +323,19 @@ export const getCustomerRevenueTrend = unstable_cache(
     const supabase = createAdminClient();
     const start = format(subMonths(today(), months), "yyyy-MM-dd");
 
-    const { data } = await supabase
-      .from("invoices")
-      .select("doc_date, doc_total, vat_sum")
-      .eq("card_code", card_code)
-      .eq("cancelled", false)
-      .gte("doc_date", start);
+    const rows = await fetchAllRows<{ doc_date: string; doc_total: number; vat_sum: number }>("getCustomerRevenueTrend", (from, to) =>
+      supabase
+        .from("invoices")
+        .select("doc_date, doc_total, vat_sum")
+        .eq("card_code", card_code)
+        .eq("cancelled", false)
+        .gte("doc_date", start)
+        .order("doc_entry", { ascending: true })
+        .range(from, to),
+    );
 
     const byMonth = new Map<string, { rev: number; cnt: number }>();
-    for (const r of data ?? []) {
+    for (const r of rows) {
       const m = (r.doc_date as string).slice(0, 7);
       const prev = byMonth.get(m) ?? { rev: 0, cnt: 0 };
       byMonth.set(m, { rev: prev.rev + Number(r.doc_total ?? 0) - Number(r.vat_sum ?? 0), cnt: prev.cnt + 1 });
@@ -346,17 +355,23 @@ export const getCustomerARAging = unstable_cache(
   async (card_code: string): Promise<ARAging> => {
     const supabase = createAdminClient();
 
-    const { data } = await supabase
-      .from("invoices")
-      .select("doc_total, paid_to_date_sys, doc_due_date, doc_date")
-      .eq("card_code", card_code)
-      .eq("doc_status", "O")
-      .eq("cancelled", false);
+    const rows = await fetchAllRows<{ doc_total: number; paid_to_date_sys: number; doc_due_date: string | null; doc_date: string }>(
+      "getCustomerARAging",
+      (from, to) =>
+        supabase
+          .from("invoices")
+          .select("doc_total, paid_to_date_sys, doc_due_date, doc_date")
+          .eq("card_code", card_code)
+          .eq("doc_status", "O")
+          .eq("cancelled", false)
+          .order("doc_entry", { ascending: true })
+          .range(from, to),
+    );
 
     const now = today();
     const aging: ARAging = { b0_30: 0, b31_60: 0, b61_90: 0, b90_plus: 0, total: 0 };
 
-    for (const r of data ?? []) {
+    for (const r of rows) {
       const outstanding = Math.max(0, Number(r.doc_total ?? 0) - Number(r.paid_to_date_sys ?? 0));
       if (outstanding <= 0) continue;
       const dueDate = r.doc_due_date ? new Date((r.doc_due_date as string) + "T00:00:00") : new Date((r.doc_date as string) + "T00:00:00");
@@ -415,14 +430,18 @@ export const getCustomerRecentPayments = unstable_cache(
 export const getCustomerCountries = unstable_cache(
   async (): Promise<string[]> => {
     const supabase = createAdminClient();
-    const { data } = await supabase
-      .from("customers")
-      .select("country")
-      .eq("card_type", "C")
-      .eq("valid", true)
-      .not("country", "is", null);
+    const rows = await fetchAllRows<{ country: string | null }>("getCustomerCountries", (from, to) =>
+      supabase
+        .from("customers")
+        .select("country")
+        .eq("card_type", "C")
+        .eq("valid", true)
+        .not("country", "is", null)
+        .order("card_code", { ascending: true })
+        .range(from, to),
+    );
     const set = new Set<string>();
-    for (const r of data ?? []) if (r.country) set.add(r.country as string);
+    for (const r of rows) if (r.country) set.add(r.country);
     return Array.from(set).sort();
   },
   ["customers-countries"],

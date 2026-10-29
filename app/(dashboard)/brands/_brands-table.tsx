@@ -12,6 +12,7 @@ import { formatKES } from "@/lib/formatters";
 const COLUMNS: ColumnDef<SkuRow>[] = [
   {
     key: "item_name",
+    mobile: "title",
     header: "SKU",
     sortKey: "name",
     cell: (row) => (
@@ -62,6 +63,7 @@ const COLUMNS: ColumnDef<SkuRow>[] = [
   },
   {
     key: "status",
+    mobile: "badge",
     header: "Status",
     cell: (row) => <StatusBadge variant={row.valid ? "active" : "inactive"} />,
   },

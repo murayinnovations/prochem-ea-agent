@@ -60,12 +60,14 @@ async function FastMovingSkusSection() {
           <TableHeader>
             <TableRow className="border-slate-200 bg-slate-50 hover:bg-slate-50">
               <TableHead className="text-xs font-semibold text-slate-600">Item</TableHead>
-              <TableHead className="text-xs font-semibold text-slate-600">Group</TableHead>
+              <TableHead className="hidden text-xs font-semibold text-slate-600 sm:table-cell">Group</TableHead>
               <TableHead className="text-right text-xs font-semibold text-slate-600">
                 Volume (30d)
               </TableHead>
-              <TableHead className="text-xs font-semibold text-slate-600">Trend vs prior 30d</TableHead>
-              <TableHead className="text-right text-xs font-semibold text-slate-600">
+              <TableHead className="text-xs font-semibold text-slate-600">
+                Trend<span className="hidden sm:inline"> vs prior 30d</span>
+              </TableHead>
+              <TableHead className="hidden text-right text-xs font-semibold text-slate-600 sm:table-cell">
                 Product Revenue (30d)
               </TableHead>
             </TableRow>
@@ -77,7 +79,7 @@ async function FastMovingSkusSection() {
 
               return (
                 <TableRow key={sku.item_code} className="border-slate-100 hover:bg-slate-50">
-                  <TableCell className="max-w-[200px]">
+                  <TableCell className="max-w-[140px] sm:max-w-[200px]">
                     <Link
                       href={`/brands/${encodeURIComponent(sku.item_code)}`}
                       className="font-medium text-slate-900 hover:text-amber-700 truncate block"
@@ -86,7 +88,7 @@ async function FastMovingSkusSection() {
                     </Link>
                     <span className="font-mono text-[10px] text-slate-400">{sku.item_code}</span>
                   </TableCell>
-                  <TableCell className="text-xs text-slate-500">
+                  <TableCell className="hidden text-xs text-slate-500 sm:table-cell">
                     {sku.items_group_name ?? "—"}
                   </TableCell>
                   <TableCell className="text-right font-mono text-sm text-slate-900">
@@ -120,7 +122,7 @@ async function FastMovingSkusSection() {
                       </span>
                     )}
                   </TableCell>
-                  <TableCell className="text-right font-mono text-sm text-slate-900">
+                  <TableCell className="hidden text-right font-mono text-sm text-slate-900 sm:table-cell">
                     {formatKES(sku.total_revenue)}
                   </TableCell>
                 </TableRow>
@@ -155,7 +157,7 @@ export default async function BrandsPage({ searchParams }: Props) {
       />
 
       {/* UDF missing banner */}
-      <div className="mb-6 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+      <div className="mb-6 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 sm:text-sm">
         <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
         <p>
           Brand-level breakdown is not yet available — Prochem&apos;s SAP brand and category UDFs
@@ -164,7 +166,7 @@ export default async function BrandsPage({ searchParams }: Props) {
         </p>
       </div>
 
-      <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 [&>*:last-child:nth-child(odd)]:col-span-2 sm:[&>*:last-child:nth-child(odd)]:col-span-1">
         <KpiStat label="SKUs shown" value={total.toLocaleString()} icon={Package} />
         <KpiStat label="Revenue (30d)" value={formatKES(totalRev30)} />
         <KpiStat label="Volume (30d)" value={totalVol30.toLocaleString()} />

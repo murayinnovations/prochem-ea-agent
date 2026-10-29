@@ -34,7 +34,7 @@ function fmtTooltip(v: unknown): string {
 export function RevenueAreaChart({ data }: { data: DailyRevenue[] }) {
   return (
     <ResponsiveContainer width="100%" height={240}>
-      <AreaChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
+      <AreaChart data={data} margin={{ top: 4, right: 24, left: 0, bottom: 4 }}>
         <defs>
           <linearGradient id="amberArea" x1="0" y1="0" x2="0" y2="1">
             <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.25} />
