@@ -2,23 +2,25 @@
 
 import { LineChart, Line, ResponsiveContainer, Tooltip } from "recharts";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
 import { format, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
+import { formatKES } from "@/lib/formatters";
 
 export interface SparklinePoint {
   month: string; // ISO date, first-of-month
   value: number;
 }
 
+// Rendered from a server component, so props must be serializable: the icon
+// arrives as an element and values are always KES (functions can't cross over).
 interface Props {
   title: string;
-  icon?: LucideIcon;
+  icon?: ReactNode;
   data: SparklinePoint[];
-  formatValue: (n: number) => string;
 }
 
-export function SparklineCard({ title, icon: Icon, data, formatValue }: Props) {
+export function SparklineCard({ title, icon, data }: Props) {
   const last = data.at(-1);
   const prev = data.at(-2);
   const delta = last && prev && prev.value !== 0 ? ((last.value - prev.value) / prev.value) * 100 : null;
@@ -29,14 +31,14 @@ export function SparklineCard({ title, icon: Icon, data, formatValue }: Props) {
     <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex items-start justify-between">
         <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">{title}</p>
-        {Icon && (
+        {icon && (
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50">
-            <Icon className="h-4 w-4 text-amber-500" />
+            {icon}
           </div>
         )}
       </div>
       <p className="mt-2.5 text-2xl font-bold tracking-tight text-slate-900">
-        {last ? formatValue(last.value) : "—"}
+        {last ? formatKES(last.value) : "—"}
       </p>
       {delta !== null && (
         <div
@@ -64,7 +66,7 @@ export function SparklineCard({ title, icon: Icon, data, formatValue }: Props) {
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 2, right: 2, left: 2, bottom: 2 }}>
             <Tooltip
-              formatter={(v) => [formatValue(v as number), title]}
+              formatter={(v) => [formatKES(v as number), title]}
               labelFormatter={(label) => {
                 try {
                   return format(parseISO(label as string), "MMM yyyy");

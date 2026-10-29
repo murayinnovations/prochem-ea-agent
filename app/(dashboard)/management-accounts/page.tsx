@@ -139,20 +139,17 @@ export default async function ManagementAccountsPage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <SparklineCard
               title="Gross Turnover"
-              icon={TrendingUp}
-              formatValue={formatKES}
+              icon={<TrendingUp className="h-4 w-4 text-amber-500" />}
               data={ascending.map((u) => ({ month: u.period_month, value: u.revenue_kes ?? 0 }))}
             />
             <SparklineCard
               title="Total AR Outstanding"
-              icon={Users2}
-              formatValue={formatKES}
+              icon={<Users2 className="h-4 w-4 text-amber-500" />}
               data={ascending.map((u) => ({ month: u.period_month, value: u.ar_outstanding_kes }))}
             />
             <SparklineCard
               title="Total Stock Value"
-              icon={Boxes}
-              formatValue={formatKES}
+              icon={<Boxes className="h-4 w-4 text-amber-500" />}
               data={ascending.map((u) => ({ month: u.period_month, value: u.stock_value_kes }))}
             />
           </div>
